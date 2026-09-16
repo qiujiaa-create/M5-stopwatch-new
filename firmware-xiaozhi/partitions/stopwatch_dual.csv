@@ -1,0 +1,45 @@
+﻿# ESP-IDF Partition Table — M5Stack StopWatch 双固件 A/B
+#
+# 设计要点（详见 docs/xiaozhi-integration-plan.md §3.5）：
+#
+#   1) 16MB flash 布局：
+#        factory   6.0MB  现有 StopWatch 固件（app 实测 5.55MB，余约 465KB）
+#        ota_0     3.0MB  小智固件        （app 实测 2.83MB，余约 178KB）
+#        storage   4.0MB  FAT + wear-levelling
+#        coredump  64KB
+#        尾部 2.81MB (0xd30000 ~ 0x1000000) 暂不分配，预留给以后的 assets / 唤醒词模型
+#
+#   2) storage 的 offset(0x920000) 与 size(0x400000) **与原固件完全一致**：
+#        - wear levelling 全部状态按 `start_addr + 相对偏移` 寻址
+#          （esp-idf/components/wear_levelling/WL_Flash.cpp:84-86），
+#          只在 size 变化时才会校验失败重格式化。这里 size 未改 => badge 图保留，
+#          也**不需要搬移任何数据**；
+#        - nvs 位置不变 —— 78/esp-wifi-connect 的配网凭据（NVS namespace "wifi"）保留，
+#          两个固件共用同一份 WiFi 配置，只需配一次网。
+#
+#   3) factory 由 9MB 缩到 6MB，省出的 3MB 给 ota_0。原先把 ota_0 塞在 16MB 尾部
+#      只剩 2.81MB，而小智 app 实测 2.826MB（2962976B），会溢出约 13.5KB。
+#      factory 只是 app 槽、无持久数据，缩小安全。
+#
+#   4) 切换机制（全部为 ESP-IDF 官方行为，不改二级引导器）：
+#        - 切到小智：esp_ota_set_boot_partition(ota_0)  → 重写 otadata 的 ota_seq
+#        - 切回原生：擦除整个 otadata 分区              → 引导器回落到 factory
+#      （esp_ota_ops.c 的 find_default_boot_partition：otadata 无效时 factory 优先）
+#
+#   5) 全程要求 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=n（原固件已是此配置），
+#      否则从 ota_0 启动会被标记 PENDING_VERIFY，未 confirm 时重启会回滚。
+#      小智侧在 sdkconfig.defaults.stopwatch 里显式覆盖为 n。
+#
+#   6) 本表没有 assets / model 分区 => 小智走"无离线资源"路径：
+#        - 语音交互为按键触发（Button A 单击说话 / 长按配网）；
+#        - 无离线唤醒词、无表情动画资源。
+#      运行期 esp_srmodel_filter() 有显式 NULL 保护，缺分区不会崩。
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x4000,
+otadata,  data, ota,     0xd000,   0x2000,
+phy_init, data, phy,     0xf000,   0x1000,
+factory,  app,  factory, 0x20000,  0x600000,
+ota_0,    app,  ota_0,   0x620000, 0x300000,
+storage,  data, fat,     0x920000, 0x400000,
+coredump, data, coredump,0xd20000, 0x10000,

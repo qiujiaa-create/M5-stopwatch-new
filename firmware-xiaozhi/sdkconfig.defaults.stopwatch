@@ -1,0 +1,23 @@
+# M5Stack StopWatch (Tangaro) 专用构建配置
+#
+# 用法：
+#   export SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.defaults.stopwatch"
+#   idf.py set-target esp32s3 build
+#
+CONFIG_BOARD_TYPE_M5STACK_STOPWATCH=y
+
+# 双固件 A/B 分区表：factory 槽放原有 StopWatch 固件，ota_0 槽放小智固件。
+# storage 的 offset/size 与原固件完全一致 => badge 图与配网凭据都不会丢（详见该 csv 注释）。
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions/stopwatch_dual.csv"
+
+# ---------------------------------------------------------------------------
+# 关键：必须关掉 OTA 回滚。
+# 原 StopWatch 固件的二级引导器就是 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=n，
+# 而 xiaozhi 的 sdkconfig.defaults 里默认是 y。本项目跨两个固件共用同一个引导器，
+# 若此处为 y，从 ota_0 启动会被标记 PENDING_VERIFY，未 confirm 就重启会回滚到 factory。
+# ---------------------------------------------------------------------------
+# CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE is not set
+
+# 没有 assets 分区（尾部空间留给 ota_0），因此关闭依赖 assets 的离线唤醒词。
+# 一期交互为按键触发：Button A(GPIO2) 单击说话 / 长按配网，Button B(GPIO1) 长按切回原生系统。
+CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=n

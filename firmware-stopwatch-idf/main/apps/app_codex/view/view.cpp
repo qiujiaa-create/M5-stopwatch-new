@@ -1,0 +1,3214 @@
+/*
+ * SPDX-FileCopyrightText: 2026 M5Stack Technology CO LTD
+ *
+ * SPDX-License-Identifier: MIT
+ */
+#include "view.h"
+#include "../codex_config.h"
+#include <assets/assets.h>
+#include <hal/hal.h>
+#include <algorithm>
+#include <cctype>
+#include <climits>
+#include <cmath>
+#include <cstdio>
+#include <string_view>
+#include <ctime>
+
+using namespace view;
+using namespace uitk::lvgl_cpp;
+
+namespace {
+
+constexpr uint32_t kColorClock   = 0xEEF2FF;
+constexpr uint32_t kColorWeek    = 0x78DFF5;
+constexpr uint32_t kColorToday   = 0x397FA6;
+constexpr uint32_t kColorTrack   = 0x1D3442;
+constexpr uint32_t kColorWeekText = 0xA5EDFF;
+constexpr uint32_t kColorTodayText = 0x64A9CA;
+constexpr uint32_t kColorText    = 0xEEF2FF;
+constexpr uint32_t kColorTextDim = 0x8C96B3;
+constexpr uint32_t kColorPetBody = 0x172847;
+constexpr uint32_t kColorPetFace = 0xD9FBFF;
+constexpr uint32_t kOwBackground = 0x05070B;
+constexpr uint32_t kOwPanel      = 0x10161F;
+constexpr uint32_t kOwPanelAlt   = 0x121C29;
+constexpr uint32_t kOwBlue       = 0x35B8FF;
+constexpr uint32_t kOwGreen      = 0x55F36A;
+constexpr uint32_t kOwToday      = 0xFF7438;
+constexpr uint32_t kOwAmber      = 0xFFC542;
+constexpr uint32_t kOwTeal       = 0x2DF1D3;
+constexpr uint32_t kOwSoftText   = 0xADB9CC;
+constexpr uint32_t kOwTrack      = 0x1E2A3C;
+constexpr uint32_t kOwStatusIdle = 0x7895B2;
+constexpr uint32_t kOwAlert      = 0xFF405C;
+constexpr uint32_t kMicroBackground = 0x000000;
+constexpr uint32_t kMicroPanel      = 0x111820;
+constexpr uint32_t kMicroPanelDown  = 0x1D2935;
+constexpr uint32_t kMicroText       = 0xE8EEF5;
+constexpr uint32_t kMicroMuted      = 0x7D8A98;
+constexpr uint32_t kMicroTrack      = 0x26323D;
+constexpr uint32_t kMicroAccent     = 0x12D6B2;
+constexpr uint32_t kMicroWarning    = 0xFFB44A;
+constexpr uint32_t kMicroDanger     = 0xFF5D6C;
+constexpr uint32_t kMicroSession    = 0x4292F5;
+constexpr uint32_t kMicroWeeklyText = 0x5FD8C0;
+constexpr uint32_t kPetTouchEffectMs = 1050;
+constexpr uint32_t kPetIdleFrameMs = 50;
+constexpr uint32_t kPetActiveFrameMs = 33;
+constexpr uint32_t kActionWheelHoldMs = 480;
+constexpr uint32_t kActionWheelFrameMs = 33;
+constexpr int kActionWheelStartRadius = 72;
+constexpr int kNativeControlHoldSlop = 22;
+constexpr int kNativeControlDeadZone = 24;
+constexpr int kNativeControlFullScale = 120;
+constexpr uint32_t kNativeRadialFrameMs = 50;
+constexpr uint32_t kNativeAgentHoldMs = 480;
+constexpr uint32_t kNativeAgentPreviewFrameMs = 80;
+constexpr int kNativeAgentSwitchHysteresis = 8;
+// "CODEX LIVE" decays this long after the last quota panel arrived from the
+// bridge (the bridge refreshes quota every 300 s; a closed Codex client stops
+// panel pushes, so this timeout is what downgrades LIVE to BLE ONLY).
+constexpr uint32_t kCodexLiveTimeoutMs = 360000;
+// Periodic full-dial repaint that recovers phantom rectangles behind the
+// A1-A6 agent labels (screen pixels going stale relative to the LVGL state).
+constexpr uint32_t kMicroSelfHealIntervalMs = 30000;
+constexpr int kMicroCenterX = 233;
+constexpr int kMicroCenterY = 237;
+constexpr int kMicroAgentRadius = 56;
+constexpr int kMicroDialRadius = 104;
+constexpr int kMicroSessionDialRadius = kMicroDialRadius - 12;
+constexpr int kMicroSwipeThreshold = 32;
+constexpr int kReasoningTouchMinX = 120;
+constexpr int kReasoningTouchMaxX = 346;
+constexpr int kReasoningTouchMinY = 28;
+constexpr int kReasoningTouchMaxY = 112;
+constexpr int kReasoningSwipeThreshold = 44;
+struct NativeAgentPoint {
+    int x;
+    int y;
+};
+constexpr std::array<NativeAgentPoint, 6> kMicroAgentCenters = {{
+    {233, 72},
+    {375, 154},
+    {375, 318},
+    {233, 400},
+    {91, 318},
+    {91, 154},
+}};
+constexpr std::array<NativeAgentPoint, 4> kNativeAgentCenters = {{
+    {99, 367},
+    {184, 417},
+    {282, 417},
+    {367, 367},
+}};
+// The visible dots remain compact. This is an invisible finger target; the
+// four 84 px squares stay separate at the current arc spacing.
+constexpr int kNativeAgentHitSize = 84;
+constexpr int kNativeAgentHitHalf = kNativeAgentHitSize / 2;
+constexpr int kScreenSize = 466;
+constexpr int kScreenCenter = 233;
+constexpr int kScreenRadius = 233;
+constexpr int kQuotaRadius = 219;
+constexpr int kQuotaWidth = 18;
+constexpr int kQuotaEndpointLabelWidth = 90;
+constexpr int kQuotaEndpointLabelInset = 10;
+constexpr int kQuotaLeftLabelX = kScreenCenter - kQuotaRadius + kQuotaEndpointLabelInset;
+constexpr int kQuotaRightLabelX = kScreenCenter + kQuotaRadius - kQuotaEndpointLabelInset - kQuotaEndpointLabelWidth;
+constexpr int kQuotaCaptionY = kScreenCenter - 38;
+constexpr int kQuotaValueY = kScreenCenter - 16;
+constexpr int kQuotaGradientHalfAngle = 3;
+
+void setLabelTextIfChanged(Label& label, std::string_view text)
+{
+    const char* current = label.getText();
+    if (current != nullptr && text == current) {
+        return;
+    }
+    label.setText(text);
+}
+
+template <typename WidgetT>
+void setHiddenIfChanged(WidgetT& widget, bool hidden)
+{
+    const bool currently_hidden = lv_obj_has_flag(widget.get(), LV_OBJ_FLAG_HIDDEN);
+    if (currently_hidden != hidden) {
+        widget.setHidden(hidden);
+    }
+}
+
+uint32_t blendRgb(uint32_t from, uint32_t to, float amount)
+{
+    const float t = std::clamp(amount, 0.0f, 1.0f);
+    const auto blend_channel = [t](uint32_t a, uint32_t b) {
+        return static_cast<uint32_t>(std::lround(static_cast<float>(a) +
+                                                 (static_cast<float>(b) - static_cast<float>(a)) * t));
+    };
+    const uint32_t red = blend_channel((from >> 16) & 0xFF, (to >> 16) & 0xFF);
+    const uint32_t green = blend_channel((from >> 8) & 0xFF, (to >> 8) & 0xFF);
+    const uint32_t blue = blend_channel(from & 0xFF, to & 0xFF);
+    return (red << 16) | (green << 8) | blue;
+}
+
+uint32_t scaleRgb(uint32_t color, float brightness)
+{
+    const float value = std::clamp(brightness, 0.0f, 1.0f);
+    const uint32_t red = static_cast<uint32_t>(std::lround(((color >> 16) & 0xFF) * value));
+    const uint32_t green = static_cast<uint32_t>(std::lround(((color >> 8) & 0xFF) * value));
+    const uint32_t blue = static_cast<uint32_t>(std::lround((color & 0xFF) * value));
+    return (red << 16) | (green << 8) | blue;
+}
+
+enum class MicroAgentStatus : uint8_t {
+    Unassigned,
+    Idle,
+    Thinking,
+    Complete,
+    RequiresInput,
+    Error,
+    Active,
+};
+
+MicroAgentStatus classifyMicroAgent(const CodexView::NativeAgentState& agent)
+{
+    if (!agent.assigned || agent.brightness <= 0.01f) {
+        return MicroAgentStatus::Unassigned;
+    }
+    const int red = static_cast<int>((agent.color >> 16) & 0xFF);
+    const int green = static_cast<int>((agent.color >> 8) & 0xFF);
+    const int blue = static_cast<int>(agent.color & 0xFF);
+    const int maximum = std::max({red, green, blue});
+    const int minimum = std::min({red, green, blue});
+    if (maximum - minimum < 48 && maximum > 150) return MicroAgentStatus::Idle;
+    if (green > red * 1.12f && green > blue * 1.15f) return MicroAgentStatus::Complete;
+    if (blue > red * 1.12f && blue > green * 1.05f) return MicroAgentStatus::Thinking;
+    if (red > 150 && green > 70 && green > blue * 1.45f) return MicroAgentStatus::RequiresInput;
+    if (red > green * 1.20f && red > blue * 1.20f) return MicroAgentStatus::Error;
+    return MicroAgentStatus::Active;
+}
+
+uint32_t microAgentFill(const CodexView::NativeAgentState& agent)
+{
+    switch (classifyMicroAgent(agent)) {
+    case MicroAgentStatus::Idle: return 0xB7C2CD;
+    case MicroAgentStatus::Thinking: return 0x4292F5;
+    case MicroAgentStatus::Complete: return 0x2BC96E;
+    case MicroAgentStatus::RequiresInput: return 0xF7AC42;
+    case MicroAgentStatus::Error: return 0xF55A68;
+    case MicroAgentStatus::Active: return agent.color;
+    case MicroAgentStatus::Unassigned:
+    default: return kMicroPanel;
+    }
+}
+
+constexpr int square(int value)
+{
+    return value * value;
+}
+
+constexpr bool pointInsideRoundDisplay(int x, int y)
+{
+    return square(x - kScreenCenter) + square(y - kScreenCenter) <= square(kScreenRadius);
+}
+
+constexpr bool rectInsideRoundDisplay(int x, int y, int width, int height)
+{
+    return pointInsideRoundDisplay(x, y) &&
+           pointInsideRoundDisplay(x + width - 1, y) &&
+           pointInsideRoundDisplay(x, y + height - 1) &&
+           pointInsideRoundDisplay(x + width - 1, y + height - 1);
+}
+
+constexpr bool pointInsideNativeAgentRail(int x, int y)
+{
+    for (const auto& center : kNativeAgentCenters) {
+        if (x >= center.x - kNativeAgentHitHalf &&
+            x < center.x + kNativeAgentHitHalf &&
+            y >= center.y - kNativeAgentHitHalf &&
+            y < center.y + kNativeAgentHitHalf) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static_assert(kQuotaRadius + kQuotaWidth / 2 <= kScreenRadius - 5,
+              "Quota arc must stay inside the AMOLED safe radius");
+static_assert(rectInsideRoundDisplay(kQuotaLeftLabelX, kQuotaCaptionY, kQuotaEndpointLabelWidth, 60),
+              "Today quota labels must stay inside the round display");
+static_assert(rectInsideRoundDisplay(kQuotaRightLabelX, kQuotaCaptionY, kQuotaEndpointLabelWidth, 60),
+              "Remaining quota labels must stay inside the round display");
+static_assert(rectInsideRoundDisplay(168, 394, 130, 28),
+              "Quota refresh label must stay inside the round display");
+// The two outer invisible hit targets are intentionally clipped by the round
+// display. Their visible dots and usable touch area remain inside the circle.
+
+void setup_clock_digit_panel(Container& panel, int x)
+{
+    panel.align(LV_ALIGN_TOP_MID, x, 8);
+    panel.setSize(66, 54);
+    panel.setRadius(22);
+    panel.setBorderWidth(0);
+    panel.setBgColor(lv_color_hex(0x0A1B26));
+    panel.setBgOpa(210);
+    panel.setShadowWidth(8);
+    panel.setShadowColor(lv_color_hex(0x17465B));
+    panel.setShadowOpa(45);
+    panel.setPaddingAll(0);
+    panel.removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+}
+
+void setup_clock_flow(NumberFlow& flow)
+{
+    flow.minDigits = 2;
+    flow.setAlign(LV_ALIGN_CENTER);
+    flow.setPos(0, -1);
+    flow.setTextFont(&lv_font_montserrat_36);
+    flow.setTextColor(lv_color_hex(kColorClock));
+    flow.init();
+}
+
+float clamp01(float value)
+{
+    if (value < 0.0f) {
+        return 0.0f;
+    }
+    if (value > 1.0f) {
+        return 1.0f;
+    }
+    return value;
+}
+
+uint32_t blend_color(uint32_t from, uint32_t to, float amount)
+{
+    const float t = clamp01(amount);
+    const uint8_t fr = static_cast<uint8_t>((from >> 16) & 0xFF);
+    const uint8_t fg = static_cast<uint8_t>((from >> 8) & 0xFF);
+    const uint8_t fb = static_cast<uint8_t>(from & 0xFF);
+    const uint8_t tr = static_cast<uint8_t>((to >> 16) & 0xFF);
+    const uint8_t tg = static_cast<uint8_t>((to >> 8) & 0xFF);
+    const uint8_t tb = static_cast<uint8_t>(to & 0xFF);
+    const auto mix = [t](uint8_t a, uint8_t b) -> uint8_t {
+        return static_cast<uint8_t>(std::lround(static_cast<float>(a) + (static_cast<float>(b) - static_cast<float>(a)) * t));
+    };
+    return (static_cast<uint32_t>(mix(fr, tr)) << 16) |
+           (static_cast<uint32_t>(mix(fg, tg)) << 8) |
+           static_cast<uint32_t>(mix(fb, tb));
+}
+
+uint32_t quota_semantic_color(float fraction)
+{
+    const float value = clamp01(fraction);
+    if (value < 0.34f) {
+        return blend_color(0xFF4A3A, kOwAmber, value / 0.34f);
+    }
+    if (value < 0.68f) {
+        return blend_color(kOwAmber, 0xBDEB38, (value - 0.34f) / 0.34f);
+    }
+    return blend_color(0xBDEB38, kOwGreen, (value - 0.68f) / 0.32f);
+}
+
+uint32_t activity_heat_color(float activity)
+{
+    const float value = clamp01(activity);
+    if (value <= 0.001f) {
+        return 0x142236;
+    }
+    if (value < 0.10f) {
+        return 0x18364A;
+    }
+    if (value < 0.25f) {
+        return 0x174B63;
+    }
+    if (value < 0.45f) {
+        return 0x176078;
+    }
+    if (value < 0.65f) {
+        return 0x1591A2;
+    }
+    if (value < 0.82f) {
+        return 0x18B7B6;
+    }
+    return kOwTeal;
+}
+
+template <size_t N>
+const char* pick_phrase(const std::array<const char*, N>& phrases, uint32_t salt)
+{
+    static_assert(N > 0);
+    return phrases[(salt / 97U) % N];
+}
+
+template <size_t N>
+const void* pick_asset(const std::array<const void*, N>& assets, uint32_t salt)
+{
+    static_assert(N > 0);
+    return assets[(salt / 97U) % N];
+}
+
+const void* pick_idle_asset(uint32_t salt)
+{
+    static constexpr std::array<const void*, 3> kAssets = {
+        &codex_pet_msg_idle_0,
+        &codex_pet_msg_idle_1,
+        &codex_pet_msg_idle_2,
+    };
+    return pick_asset(kAssets, salt);
+}
+
+const void* pick_touch_asset(uint32_t salt)
+{
+    static constexpr std::array<const void*, 4> kAssets = {
+        &codex_pet_msg_touch_0,
+        &codex_pet_msg_touch_1,
+        &codex_pet_msg_touch_2,
+        &codex_pet_msg_touch_3,
+    };
+    return pick_asset(kAssets, salt);
+}
+
+const void* pick_processing_asset(uint32_t salt)
+{
+    static constexpr std::array<const void*, 4> kAssets = {
+        &codex_pet_msg_processing_0,
+        &codex_pet_msg_processing_1,
+        &codex_pet_msg_processing_2,
+        &codex_pet_msg_processing_3,
+    };
+    return pick_asset(kAssets, salt);
+}
+
+const void* pick_key_asset(uint32_t salt)
+{
+    static constexpr std::array<const void*, 3> kAssets = {
+        &codex_pet_msg_key_0,
+        &codex_pet_msg_key_1,
+        &codex_pet_msg_key_2,
+    };
+    return pick_asset(kAssets, salt);
+}
+
+const void* pick_error_asset(uint32_t salt)
+{
+    static constexpr std::array<const void*, 3> kAssets = {
+        &codex_pet_msg_error_0,
+        &codex_pet_msg_error_1,
+        &codex_pet_msg_error_2,
+    };
+    return pick_asset(kAssets, salt);
+}
+
+const char* pick_idle_phrase(uint32_t salt)
+{
+    static constexpr std::array<const char*, 6> kPhrases = {
+        "Ready",
+        "Still here",
+        "Tiny focus",
+        "Tap when ready",
+        "Quota watch",
+        "Waiting..."
+    };
+    return pick_phrase(kPhrases, salt);
+}
+
+}  // namespace
+
+void CodexView::init(lv_obj_t* parent, ThemeMode themeMode)
+{
+    _theme_mode = themeMode;
+    lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(parent,
+                              lv_color_hex(_theme_mode == ThemeMode::OpenWatcherV2 ? kOwBackground : kMicroBackground),
+                              LV_PART_MAIN);
+
+    _state.weekly   = {1.0f, 1.0f, "--"};
+    _state.message  = "Waiting...";
+
+    _panel = std::make_unique<Container>(parent);
+    _panel->align(LV_ALIGN_CENTER, 0, 0);
+    _panel->setSize(466, 466);
+    _panel->setRadius(0);
+    _panel->setBorderWidth(0);
+    _panel->setPaddingAll(0);
+    _panel->setBgColor(lv_color_hex(_theme_mode == ThemeMode::OpenWatcherV2 ? kOwBackground : kMicroBackground));
+    _panel->setBgOpa(LV_OPA_COVER);
+    _panel->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+
+    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
+        initCodexMicroDashboard();
+    } else if (_theme_mode == ThemeMode::OpenWatcherV2) {
+        initOpenWatcherV2();
+    } else {
+        initFlipClock();
+        initSemicircleQuota();
+        initPet();
+    }
+
+    _message_label = std::make_unique<Label>(_panel->get());
+    _message_label->setText(_state.message.c_str());
+    _message_label->setTextFont(_theme_mode == ThemeMode::OfficialV1
+                                    ? &lv_font_montserrat_24
+                                    : &lv_font_montserrat_18);
+    _message_label->setTextColor(lv_color_hex(_theme_mode == ThemeMode::OpenWatcherV2
+                                                  ? kOwSoftText
+                                                  : (_theme_mode == ThemeMode::CodexMicroDashboard
+                                                         ? kMicroAccent
+                                                         : kColorText)));
+    _message_label->setWidth(260);
+    _message_label->setLongMode(LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    _message_label->setTextAlign(LV_TEXT_ALIGN_CENTER);
+    _message_label->align(LV_ALIGN_TOP_MID,
+                          0,
+                          _theme_mode == ThemeMode::CodexMicroDashboard
+                              ? 292
+                              : (_theme_mode == ThemeMode::OpenWatcherV2 ? 354 : 327));
+
+    _message_image = std::make_unique<Image>(_panel->get());
+    _message_image->setSrc(&codex_pet_msg_idle_0);
+    _message_image->align(LV_ALIGN_TOP_MID, 0, _theme_mode == ThemeMode::OpenWatcherV2 ? 272 : 323);
+    _message_image->setHidden(_theme_mode != ThemeMode::OfficialV1);
+    _message_image->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _message_image_active = _theme_mode == ThemeMode::OfficialV1;
+    if (_message_label) {
+        _message_label->setHidden(true);
+    }
+
+    if (_theme_mode != ThemeMode::CodexMicroDashboard) {
+        initVoiceWaveform();
+    }
+
+    _ble_dot = std::make_unique<Container>(_panel->get());
+    _ble_dot->setSize(8, 8);
+    _ble_dot->setRadius(LV_RADIUS_CIRCLE);
+    _ble_dot->setBorderWidth(0);
+    _ble_dot->setBgColor(lv_color_hex(0x2F79FF));
+    _ble_dot->align(_theme_mode == ThemeMode::OpenWatcherV2 ? LV_ALIGN_BOTTOM_MID : LV_ALIGN_TOP_MID,
+                    -7,
+                    _theme_mode == ThemeMode::OpenWatcherV2 ? -22 : 71);
+    _ble_dot->setHidden(_theme_mode == ThemeMode::CodexMicroDashboard);
+
+    _wifi_dot = std::make_unique<Container>(_panel->get());
+    _wifi_dot->setSize(8, 8);
+    _wifi_dot->setRadius(LV_RADIUS_CIRCLE);
+    _wifi_dot->setBorderWidth(0);
+    _wifi_dot->setBgColor(lv_color_hex(0x38E07D));
+    _wifi_dot->align(_theme_mode == ThemeMode::OpenWatcherV2 ? LV_ALIGN_BOTTOM_MID : LV_ALIGN_TOP_MID,
+                     7,
+                     _theme_mode == ThemeMode::OpenWatcherV2 ? -22 : 71);
+    _wifi_dot->setHidden(_theme_mode == ThemeMode::CodexMicroDashboard);
+
+    if (_theme_mode != ThemeMode::CodexMicroDashboard) {
+        initActionWheel();
+        initTaskList();
+        initReasoningControl();
+    }
+
+    updateConnectionDots();
+    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
+        updateCodexMicroDashboardLabels();
+    } else if (_theme_mode == ThemeMode::OpenWatcherV2) {
+        updateOpenWatcherV2Labels();
+    } else {
+        updateSemicircleQuota();
+    }
+    GetHAL().updateImuData();
+}
+
+void CodexView::update()
+{
+    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
+        updateCodexMicroDashboardTouch();
+        const uint32_t now = GetHAL().millis();
+        bool transient_changed = false;
+        if (_state.messageExpiresAtMs != 0 && now > _state.messageExpiresAtMs) {
+            _state.messageExpiresAtMs = 0;
+            _state.message.clear();
+            transient_changed = true;
+        }
+        if (_micro_completed_until_ms != 0 && now > _micro_completed_until_ms) {
+            _micro_completed_until_ms = 0;
+            _micro_completed_agent = -1;
+            transient_changed = true;
+        }
+        // CODEX LIVE decays on a timer, not on a push — detect the flip here
+        // so the health label downgrades without waiting for new data.
+        const bool live_now = codexLiveActive();
+        if (live_now != _micro_last_live_state) {
+            _micro_last_live_state = live_now;
+            transient_changed = true;
+        }
+        // Self-heal: periodically force a full repaint of the dial. Recovery
+        // for phantom rectangles behind the A1-A6 labels — the screen can end
+        // up showing stale pixels that LVGL no longer considers dirty; a tap
+        // used to be the only way to force the repaint.
+        if (now - _micro_last_selfheal_ms >= kMicroSelfHealIntervalMs) {
+            _micro_last_selfheal_ms = now;
+            if (_micro_canvas) {
+                lv_obj_invalidate(_micro_canvas->get());
+            }
+        }
+        if (transient_changed) {
+            updateCodexMicroDashboardLabels();
+        }
+        return;
+    }
+    if (_task_list_active) {
+        return;
+    }
+    updateReasoningGesture();
+    if (_reasoning_touch_tracking) {
+        return;
+    }
+    if (_native_agent_touch_tracking) {
+        return;
+    }
+    updateActionWheelGesture();
+    if (_action_wheel_active) {
+        return;
+    }
+
+    if (_theme_mode != ThemeMode::OpenWatcherV2) {
+        updateFlipClock();
+    }
+
+    const uint32_t now = GetHAL().millis();
+    updateNativeAgentRail(false);
+    if (_state.messageExpiresAtMs != 0 && now > _state.messageExpiresAtMs) {
+        _state.messageExpiresAtMs = 0;
+        if (_theme_mode == ThemeMode::OpenWatcherV2) {
+            _state.message.clear();
+            if (_message_label) {
+                _message_label->setText("");
+                _message_label->setHidden(true);
+            }
+        } else {
+            const bool voice_visible = _voice_mode != VoiceMode::Idle;
+            if (_message_image_active) {
+                setIdleMessageImage(++_message_phrase_counter + now);
+            } else {
+                _state.message = pick_idle_phrase(++_message_phrase_counter + now);
+            }
+            if (_message_label && !_message_image_active) {
+                _message_label->setHidden(voice_visible);
+                _message_label->setText(_state.message.c_str());
+            }
+        }
+    }
+
+    updateMotionInput();
+
+    if (_theme_mode != ThemeMode::OpenWatcherV2) {
+        const bool voice_animated = _voice_mode == VoiceMode::Recording ||
+                                    _voice_mode == VoiceMode::Processing;
+        const bool pet_active = voice_animated ||
+                                _state.processing ||
+                                _pet_pressed ||
+                                _pet_anim != PetAnim::Idle ||
+                                now < _pet_effect_until_tick ||
+                                _shake_energy > 0.0f;
+        const uint32_t pet_frame_ms = pet_active ? kPetActiveFrameMs : kPetIdleFrameMs;
+        if (_last_pet_update_tick == 0 || now - _last_pet_update_tick >= pet_frame_ms || _pet_pressed) {
+            _last_pet_update_tick = now;
+            updatePet();
+        }
+    }
+    updateVoiceWaveform();
+}
+
+void CodexView::applyQuota(int weeklyLeftPct,
+                           const std::string& weeklyResetLabel,
+                           bool valid,
+                           bool wifiConnected,
+                           bool processing,
+                           const std::string& message)
+{
+    codex::QuotaSnapshot snapshot;
+    snapshot.weeklyLeftPct = weeklyLeftPct;
+    snapshot.weeklyUsage = weeklyResetLabel;
+    snapshot.valid = valid;
+    snapshot.wifiConnected = wifiConnected;
+    snapshot.processing = processing;
+    snapshot.message = message;
+    applySnapshot(snapshot);
+}
+
+void CodexView::applySnapshot(const codex::QuotaSnapshot& snapshot)
+{
+    const int previous_week_pct = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
+    const auto previous_activity_buckets = _state.activityBuckets;
+
+    _state.wifiConnected = snapshot.wifiConnected;
+    _state.processing = snapshot.processing;
+    _state.source = snapshot.source;
+    _state.updatedAt = snapshot.updatedAt;
+    _state.stale = snapshot.stale || snapshot.cached;
+    _state.quotaValid = snapshot.valid;
+    _state.hostName = snapshot.hostName;
+    _state.sessionTitle = snapshot.sessionTitle.empty() ? "Codex Ready" : snapshot.sessionTitle;
+    _state.contextLabel = snapshot.contextLabel.empty() ? "-- / --" : snapshot.contextLabel;
+    _state.contextPressurePct = std::clamp(snapshot.contextPressurePct, 0, 100);
+    _state.compactThresholdPct = snapshot.compactThresholdPct;
+    _state.compactWarning = snapshot.compactWarning;
+    _state.totalTokensLabel = snapshot.totalTokensLabel.empty() ? "--" : snapshot.totalTokensLabel;
+    _state.modelLabel = snapshot.modelLabel.empty() ? "--" : snapshot.modelLabel;
+    _state.reasoningLabel = snapshot.reasoningLabel.empty() ? "--" : snapshot.reasoningLabel;
+    _state.activityLabel = snapshot.activityLabel.empty() ? "--" : snapshot.activityLabel;
+    _state.activityLive = snapshot.activityLive;
+    _state.activityBuckets = snapshot.activityBuckets;
+    _state.weeklyDayStartLeftPct = snapshot.weeklyDayStartLeftPct;
+    _state.weeklySegmentStartLeftPct = snapshot.weeklySegmentStartLeftPct;
+    _state.weeklyTodayUsedPctPoints = snapshot.weeklyTodayUsedPctPoints;
+    _state.weeklyResetCount = snapshot.weeklyResetCount;
+    _state.weeklyTrackingPeriodStart = snapshot.weeklyTrackingPeriodStart;
+    _last_quota_update_tick = GetHAL().millis();
+
+    if (snapshot.valid) {
+        _state.weekly.used = 100.0f - static_cast<float>(std::clamp(snapshot.weeklyLeftPct, 0, 100));
+        _state.weekly.limit = 100.0f;
+        _state.weekly.resetInLabel = snapshot.weeklyUsage.empty() ? "--" : snapshot.weeklyUsage;
+        _state.session5hLeftPct = std::clamp(snapshot.sessionLeftPct, -1, 100);
+        _state.session5hResetLabel = (_state.session5hLeftPct >= 0 && !snapshot.sessionResetIn.empty())
+                                         ? snapshot.sessionResetIn
+                                         : "--";
+    } else {
+        _state.weekly.used = 100.0f;
+        _state.weekly.limit = 100.0f;
+        _state.weekly.resetInLabel = "--";
+        _state.session5hLeftPct = -1;
+        _state.session5hResetLabel = "--";
+    }
+
+    const int updated_week_pct = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
+    const bool v2_canvas_changed = previous_week_pct != updated_week_pct ||
+                                   previous_activity_buckets != _state.activityBuckets;
+
+    updateConnectionDots();
+    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
+        updateCodexMicroDashboardLabels();
+        if (_micro_canvas) {
+            lv_obj_invalidate(_micro_canvas->get());
+        }
+    } else if (_theme_mode == ThemeMode::OpenWatcherV2) {
+        updateOpenWatcherV2Labels();
+        if (v2_canvas_changed && _v2_canvas) {
+            lv_obj_invalidate(_v2_canvas->get());
+        }
+    } else {
+        updateSemicircleQuota();
+    }
+    setMessageText(snapshot.message);
+    if (_state.processing) {
+        setMessageImage(pick_processing_asset(++_message_phrase_counter + GetHAL().millis()), 2400);
+    }
+}
+
+void CodexView::applyBleState(bool connected, const std::string& hostMessage, bool hostMessageChanged)
+{
+    if (_state.bleConnected != connected) {
+        _state.bleConnected = connected;
+        updateConnectionDots();
+        updateOpenWatcherV2Labels();
+        updateCodexMicroDashboardLabels();
+        if (_micro_canvas) {
+            lv_obj_invalidate(_micro_canvas->get());
+        }
+    }
+
+    if (hostMessageChanged && !hostMessage.empty()) {
+        if (hostMessage == "Typeless recording" ||
+            hostMessage == "Typeless processing" ||
+            hostMessage == "Typeless idle" ||
+            hostMessage == "Bridge ready") {
+            if (hostMessage == "Bridge ready" &&
+                (_state.message == "Bridge unavailable" ||
+                 _state.message == "App unavailable" ||
+                 _state.message == "Host state unknown")) {
+                setMessageText(pick_idle_phrase(++_message_phrase_counter + GetHAL().millis()));
+            }
+            return;
+        }
+        std::string message = hostMessage;
+        if (hostMessage == "BLE connected") {
+            message = "BLE connected";
+        } else if (hostMessage == "BLE paired") {
+            message = "BLE paired";
+        } else if (hostMessage == "BLE disconnected") {
+            message = "BLE disconnected";
+        } else if (hostMessage == "BLE ready") {
+            message = "BLE ready";
+        } else if (hostMessage == "Key sent") {
+            setMessageImage(pick_key_asset(++_message_phrase_counter + GetHAL().millis()), 1500);
+            return;
+        } else if (hostMessage == "Key send failed") {
+            setMessageImage(pick_error_asset(++_message_phrase_counter + GetHAL().millis()), 1800);
+            return;
+        } else if (hostMessage == "Typeless request sent") {
+            setMessageImage(pick_key_asset(++_message_phrase_counter + GetHAL().millis()), 1500);
+            return;
+        } else if (hostMessage == "Bridge fallback key") {
+            setMessageImage(pick_key_asset(++_message_phrase_counter + GetHAL().millis()), 1500);
+            return;
+        }
+        setMessageText(message);
+    }
+}
+
+void CodexView::setUnreadTaskCount(int count)
+{
+    _state.unreadStateValid = true;
+    _state.unreadTaskCount = std::max(count, 0);
+    if (_theme_mode == ThemeMode::OpenWatcherV2) {
+        updateOpenWatcherV2Labels();
+    }
+}
+
+void CodexView::setUnreadTasks(const std::vector<TaskItem>& tasks)
+{
+    _unread_tasks = tasks;
+    updateTaskListRows();
+}
+
+void CodexView::setNativeAgentStates(bool ready,
+                                     bool communicating,
+                                     const std::array<NativeAgentState, 6>& agents)
+{
+    if (_native_agents_observed && _theme_mode == ThemeMode::CodexMicroDashboard) {
+        for (size_t index = 0; index < agents.size(); ++index) {
+            if (classifyMicroAgent(_native_agents[index]) != MicroAgentStatus::Complete &&
+                classifyMicroAgent(agents[index]) == MicroAgentStatus::Complete) {
+                _micro_completed_agent = static_cast<int>(index);
+                _micro_completed_until_ms = GetHAL().millis() + 2200;
+                GetHAL().vibrate(70, 90);
+            }
+        }
+    }
+    _native_agents_ready = ready;
+    _native_codex_communicating = communicating;
+    _native_agents = agents;
+    _native_agents_observed = true;
+    updateNativeAgentRail(true);
+    updateOpenWatcherV2Labels();
+    updateCodexMicroDashboardLabels();
+}
+
+void CodexView::setBatteryState(int percent, bool charging)
+{
+    // Battery no longer renders on the dial face; the top swipe status bar
+    // owns battery display. Keep the state for future consumers.
+    percent = std::clamp(percent, 0, 100);
+    _battery_percent = percent;
+    _battery_charging = charging;
+}
+
+void CodexView::setPhysicalControlState(bool leftPressed, bool rightPressed)
+{
+    if (_micro_left_pressed == leftPressed && _micro_right_pressed == rightPressed) {
+        return;
+    }
+    _micro_left_pressed = leftPressed;
+    _micro_right_pressed = rightPressed;
+    updateCodexMicroDashboardLabels();
+}
+
+void CodexView::showTaskList()
+{
+    if (_unread_tasks.empty()) {
+        showActionMessage("NO UNREAD TASKS");
+        return;
+    }
+    setTaskListVisible(true);
+}
+
+std::string CodexView::consumeTaskOpenRequest()
+{
+    std::string request = _task_open_request;
+    _task_open_request.clear();
+    return request;
+}
+
+int CodexView::consumeNativeAgentSlotRequest()
+{
+    const int request = _native_agent_slot_request;
+    _native_agent_slot_request = -1;
+    return request;
+}
+
+int CodexView::consumeNativeActionRequest()
+{
+    const int request = _native_action_request;
+    _native_action_request = -1;
+    return request;
+}
+
+void CodexView::showActionMessage(const char* message)
+{
+    setMessage(message, 1800);
+}
+
+void CodexView::setVoiceActive(bool active)
+{
+    setVoiceMode(active ? VoiceMode::Recording : VoiceMode::Idle);
+}
+
+void CodexView::setVoiceMode(VoiceMode mode)
+{
+    if (_voice_mode == mode) {
+        return;
+    }
+
+    _voice_mode = mode;
+    if (mode != VoiceMode::Idle && _native_agent_touch_tracking) {
+        resetNativeAgentTouch();
+    }
+    if (mode != VoiceMode::Idle && (_action_wheel_active || _action_touch_tracking)) {
+        resetNativeTouchControl(true);
+        _native_control_blocked_until_release = true;
+    }
+    if (mode != VoiceMode::Idle && _task_list_active) {
+        setTaskListVisible(false);
+    }
+    if (mode != VoiceMode::Idle && _reasoning_touch_tracking) {
+        setReasoningControlVisible(false);
+        _reasoning_touch_tracking = false;
+        _reasoning_swipe_direction = 0;
+    }
+    const bool visible = mode == VoiceMode::Recording || mode == VoiceMode::Processing;
+    if (_voice_waveform) {
+        _voice_waveform->setHidden(!visible);
+    }
+    if (mode == VoiceMode::Interrupted) {
+        _message_image_active = false;
+        _state.message = "MIC LOST - PRESS A";
+        _state.messageExpiresAtMs = 0;
+        if (_message_label) {
+            _message_label->setText(_state.message.c_str());
+            _message_label->setTextColor(lv_color_hex(kOwAmber));
+            _message_label->setHidden(_theme_mode == ThemeMode::OpenWatcherV2);
+        }
+        if (_message_image) {
+            _message_image->setHidden(true);
+        }
+    } else {
+        if (_message_label) {
+            if (_state.message == "MIC LOST - PRESS A") {
+                _state.message.clear();
+                _message_label->setText("");
+            }
+            _message_label->setTextColor(lv_color_hex(_theme_mode == ThemeMode::OpenWatcherV2
+                                                          ? kOwSoftText
+                                                          : (_theme_mode == ThemeMode::CodexMicroDashboard
+                                                                 ? kMicroAccent
+                                                                 : kColorText)));
+            _message_label->setHidden(visible || _message_image_active);
+        }
+        if (_message_image) {
+            _message_image->setHidden(visible || !_message_image_active);
+        }
+    }
+    if (_v2_sync_indicator) {
+        setHiddenIfChanged(*_v2_sync_indicator, visible || mode == VoiceMode::Interrupted);
+    }
+    updateOpenWatcherV2Labels();
+    updateCodexMicroDashboardLabels();
+    if (_micro_canvas) {
+        lv_obj_invalidate(_micro_canvas->get());
+    }
+}
+
+uint32_t CodexView::frameIntervalMs() const
+{
+    if (_action_touch_tracking || _action_wheel_active || _reasoning_touch_tracking ||
+        _native_agent_touch_tracking || _micro_touch_tracking) {
+        return kActionWheelFrameMs;
+    }
+    if (_task_list_active) {
+        return 100;
+    }
+    if (_theme_mode == ThemeMode::OpenWatcherV2) {
+        return 100;
+    }
+    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
+        return 100;
+    }
+    return (_voice_mode == VoiceMode::Recording || _voice_mode == VoiceMode::Processing)
+        ? kPetActiveFrameMs
+        : kPetIdleFrameMs;
+}
+
+bool CodexView::consumeClearInputRequest()
+{
+    if (!_clear_input_requested) {
+        return false;
+    }
+    _clear_input_requested = false;
+    return true;
+}
+
+int CodexView::consumeReasoningDeltaRequest()
+{
+    const int request = _reasoning_delta_request;
+    _reasoning_delta_request = 0;
+    return request;
+}
+
+bool CodexView::consumeNativeRadialRequest(float& angle, float& distance)
+{
+    if (!_native_radial_pending) {
+        return false;
+    }
+    angle = _native_radial_angle;
+    distance = _native_radial_distance;
+    _native_radial_pending = false;
+    return true;
+}
+
+void CodexView::initActionWheel()
+{
+    _action_wheel_canvas = std::make_unique<Container>(_panel->get());
+    _action_wheel_canvas->setSize(kScreenSize, kScreenSize);
+    _action_wheel_canvas->align(LV_ALIGN_CENTER, 0, 0);
+    _action_wheel_canvas->setBgColor(lv_color_hex(0x02050A));
+    _action_wheel_canvas->setBgOpa(248);
+    _action_wheel_canvas->setBorderWidth(0);
+    _action_wheel_canvas->setPaddingAll(0);
+    _action_wheel_canvas->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(_action_wheel_canvas->get(), &CodexView::drawActionWheelEvent,
+                        LV_EVENT_DRAW_MAIN_BEGIN, this);
+
+    static constexpr std::array<const char*, 4> kLabels = {
+        "UP", "RESERVED", "DOWN", "RESERVED"
+    };
+    static constexpr std::array<lv_align_t, 4> kAlign = {
+        LV_ALIGN_TOP_MID, LV_ALIGN_RIGHT_MID, LV_ALIGN_BOTTOM_MID, LV_ALIGN_LEFT_MID
+    };
+    static constexpr std::array<int, 4> kX = {0, -19, 0, 19};
+    static constexpr std::array<int, 4> kY = {92, 0, -92, 0};
+    for (size_t i = 0; i < _action_wheel_labels.size(); ++i) {
+        auto label = std::make_unique<Label>(_action_wheel_canvas->get());
+        label->setText(kLabels[i]);
+        label->setTextFont(&lv_font_montserrat_18);
+        label->setTextColor(lv_color_hex(kOwSoftText));
+        label->setWidth(92);
+        label->setTextAlign(LV_TEXT_ALIGN_CENTER);
+        label->align(kAlign[i], kX[i], kY[i]);
+        label->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        _action_wheel_labels[i] = std::move(label);
+    }
+
+    _action_wheel_center = std::make_unique<Container>(_action_wheel_canvas->get());
+    _action_wheel_center->setSize(128, 128);
+    _action_wheel_center->align(LV_ALIGN_CENTER, 0, 0);
+    _action_wheel_center->setRadius(LV_RADIUS_CIRCLE);
+    _action_wheel_center->setBgColor(lv_color_hex(0x0B1624));
+    _action_wheel_center->setBgOpa(245);
+    _action_wheel_center->setBorderWidth(2);
+    _action_wheel_center->setBorderColor(lv_color_hex(0x29415F));
+    _action_wheel_center->setShadowWidth(14);
+    _action_wheel_center->setShadowColor(lv_color_hex(kOwBlue));
+    _action_wheel_center->setShadowOpa(35);
+    _action_wheel_center->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+
+    _action_wheel_center_label = std::make_unique<Label>(_action_wheel_center->get());
+    _action_wheel_center_label->setText("SLIDE\nUP / DOWN");
+    _action_wheel_center_label->setTextFont(&lv_font_montserrat_16);
+    _action_wheel_center_label->setTextColor(lv_color_hex(kColorText));
+    _action_wheel_center_label->setWidth(110);
+    _action_wheel_center_label->setTextAlign(LV_TEXT_ALIGN_CENTER);
+    _action_wheel_center_label->align(LV_ALIGN_CENTER, 0, 0);
+
+    setActionWheelVisible(false);
+}
+
+void CodexView::setActionWheelVisible(bool visible)
+{
+    if (!_action_wheel_canvas) {
+        return;
+    }
+    _action_wheel_active = visible;
+    _action_wheel_canvas->setHidden(!visible);
+    if (visible) {
+        _action_wheel_canvas->moveForeground();
+        updateActionWheelSelection(-1);
+        lv_obj_invalidate(_action_wheel_canvas->get());
+    }
+}
+
+void CodexView::updateActionWheelSelection(int selection)
+{
+    selection = (selection >= 0 && selection < 4) ? selection : -1;
+    if (_action_wheel_selection == selection) {
+        return;
+    }
+    _action_wheel_selection = selection;
+
+    static constexpr std::array<uint32_t, 4> kColors = {
+        kOwBlue, kOwStatusIdle, kOwTeal, kOwStatusIdle
+    };
+    for (size_t i = 0; i < _action_wheel_labels.size(); ++i) {
+        if (_action_wheel_labels[i]) {
+            _action_wheel_labels[i]->setTextColor(
+                lv_color_hex(static_cast<int>(i) == selection ? kColors[i] : kOwSoftText));
+        }
+    }
+    if (_action_wheel_center_label) {
+        static constexpr std::array<const char*, 4> kSelectedLabels = {
+            "ANALOG\nUP", "ANALOG\nRIGHT", "ANALOG\nDOWN", "ANALOG\nLEFT"
+        };
+        _action_wheel_center_label->setText(
+            selection >= 0 ? kSelectedLabels[selection] : "SLIDE\n4 WAYS");
+        _action_wheel_center_label->setTextColor(
+            lv_color_hex(selection >= 0 ? kColors[selection] : kColorText));
+    }
+    if (_action_wheel_canvas) {
+        lv_obj_invalidate(_action_wheel_canvas->get());
+    }
+}
+
+void CodexView::queueNativeRadial(float angle, float distance)
+{
+    _native_radial_angle = std::clamp(angle, 0.0f, 1.0f);
+    _native_radial_distance = std::clamp(distance, 0.0f, 1.0f);
+    _native_radial_pending = true;
+}
+
+void CodexView::resetNativeTouchControl(bool queueNeutral)
+{
+    const bool was_active = _action_wheel_active;
+    if (queueNeutral && (_action_wheel_active || _native_radial_distance > 0.0f)) {
+        queueNativeRadial(_native_radial_angle, 0.0f);
+    }
+    setActionWheelVisible(false);
+    _action_touch_tracking = false;
+    _action_touch_started_at = 0;
+    _action_touch_start_x = 0;
+    _action_touch_start_y = 0;
+    _native_control_axis = 0;
+    _last_native_radial_tick = 0;
+    updateActionWheelSelection(-1);
+    if (was_active) {
+        _suppress_pet_click_until_ms = GetHAL().millis() + 350;
+    }
+}
+
+void CodexView::updateActionWheelGesture()
+{
+    if (_task_list_active) {
+        return;
+    }
+    lv_indev_t* indev = GetHAL().lvTouchpad;
+    if (!indev) {
+        return;
+    }
+
+    const uint32_t now = GetHAL().millis();
+    const lv_indev_state_t state = lv_indev_get_state(indev);
+    lv_point_t point = {0, 0};
+    lv_indev_get_point(indev, &point);
+
+    if (state == LV_INDEV_STATE_PR) {
+        if (_native_control_blocked_until_release) {
+            return;
+        }
+        if (!_action_touch_tracking) {
+            if (_theme_mode == ThemeMode::OpenWatcherV2 &&
+                pointInsideNativeAgentRail(point.x, point.y)) {
+                return;
+            }
+            const int dx = point.x - kScreenCenter;
+            const int dy = point.y - kScreenCenter;
+            if (_voice_mode == VoiceMode::Idle &&
+                dx * dx + dy * dy <= kActionWheelStartRadius * kActionWheelStartRadius) {
+                _action_touch_tracking = true;
+                _action_touch_started_at = now;
+                _action_touch_start_x = point.x;
+                _action_touch_start_y = point.y;
+                _native_control_axis = 0;
+                // Stage one: confirm that the center target was acquired. The
+                // stronger vibration still occurs after the hold threshold.
+                GetHAL().vibrate(14, 35);
+            }
+            return;
+        }
+
+        const int touch_dx = point.x - _action_touch_start_x;
+        const int touch_dy = point.y - _action_touch_start_y;
+        if (!_action_wheel_active && now - _action_touch_started_at < kActionWheelHoldMs &&
+            touch_dx * touch_dx + touch_dy * touch_dy >
+                kNativeControlHoldSlop * kNativeControlHoldSlop) {
+            resetNativeTouchControl(false);
+            _native_control_blocked_until_release = true;
+            return;
+        }
+
+        if (!_action_wheel_active && now - _action_touch_started_at >= kActionWheelHoldMs) {
+            if (_theme_mode != ThemeMode::OpenWatcherV2) {
+                _suppress_pet_click_until_ms = now + 350;
+            }
+            setActionWheelVisible(true);
+            queueNativeRadial(_native_radial_angle, 0.0f);
+            _last_native_radial_tick = now;
+            GetHAL().vibrate(35, 80);
+            return;
+        }
+
+        if (_action_wheel_active) {
+            const int dx = point.x - _action_touch_start_x;
+            const int dy = point.y - _action_touch_start_y;
+            const int abs_x = std::abs(dx);
+            const int abs_y = std::abs(dy);
+            if (_native_control_axis == 0 &&
+                std::max(abs_x, abs_y) >= kNativeControlDeadZone) {
+                _native_control_axis = abs_y >= abs_x ? 1 : 2;
+            }
+
+            int selection = -1;
+            if (_native_control_axis == 1 && abs_y >= kNativeControlDeadZone) {
+                selection = dy < 0 ? 0 : 2;
+                const float scaled = clamp01(
+                    static_cast<float>(abs_y - kNativeControlDeadZone) /
+                    static_cast<float>(kNativeControlFullScale - kNativeControlDeadZone));
+                const float distance = 0.15f + 0.85f * scaled;
+                const float angle = dy < 0 ? 0.75f : 0.25f;
+                if (now - _last_native_radial_tick >= kNativeRadialFrameMs) {
+                    queueNativeRadial(angle, distance);
+                    _last_native_radial_tick = now;
+                }
+            } else if (_native_control_axis == 1 && _native_radial_distance > 0.0f) {
+                queueNativeRadial(_native_radial_angle, 0.0f);
+                _last_native_radial_tick = now;
+            } else if (_native_control_axis == 2 && abs_x >= kNativeControlDeadZone) {
+                selection = dx < 0 ? 3 : 1;
+                const float scaled = clamp01(
+                    static_cast<float>(abs_x - kNativeControlDeadZone) /
+                    static_cast<float>(kNativeControlFullScale - kNativeControlDeadZone));
+                const float distance = 0.15f + 0.85f * scaled;
+                const float angle = dx < 0 ? 0.5f : 0.0f;
+                if (now - _last_native_radial_tick >= kNativeRadialFrameMs) {
+                    queueNativeRadial(angle, distance);
+                    _last_native_radial_tick = now;
+                }
+            } else if (_native_control_axis == 2 && _native_radial_distance > 0.0f) {
+                queueNativeRadial(_native_radial_angle, 0.0f);
+                _last_native_radial_tick = now;
+            }
+            if (selection != _action_wheel_selection) {
+                updateActionWheelSelection(selection);
+                if (selection >= 0) {
+                    GetHAL().vibrate(18, 45);
+                }
+            }
+        }
+        return;
+    }
+
+    _native_control_blocked_until_release = false;
+
+    if (!_action_touch_tracking) {
+        return;
+    }
+    if (_action_wheel_active) {
+        GetHAL().vibrate(24, 55);
+    }
+    resetNativeTouchControl(true);
+}
+
+void CodexView::drawActionWheelEvent(lv_event_t* event)
+{
+    auto* view = static_cast<CodexView*>(lv_event_get_user_data(event));
+    if (view == nullptr || lv_event_get_code(event) != LV_EVENT_DRAW_MAIN_BEGIN) {
+        return;
+    }
+    lv_obj_t* obj = lv_event_get_target_obj(event);
+    lv_layer_t* layer = lv_event_get_layer(event);
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+    view->drawActionWheel(layer, coords);
+}
+
+void CodexView::drawActionWheel(lv_layer_t* layer, const lv_area_t& coords)
+{
+    static constexpr std::array<uint32_t, 4> kColors = {
+        kOwBlue, kOwStatusIdle, kOwTeal, kOwStatusIdle
+    };
+    static constexpr std::array<std::array<int, 2>, 4> kAngles = {{
+        {{238, 302}}, {{328, 32}}, {{58, 122}}, {{148, 212}}
+    }};
+
+    lv_draw_arc_dsc_t arc;
+    lv_draw_arc_dsc_init(&arc);
+    arc.center = {
+        static_cast<lv_coord_t>(coords.x1 + kScreenCenter),
+        static_cast<lv_coord_t>(coords.y1 + kScreenCenter),
+    };
+    arc.radius = 145;
+    arc.width = 58;
+    arc.rounded = 1;
+    for (size_t i = 0; i < kAngles.size(); ++i) {
+        arc.start_angle = kAngles[i][0];
+        arc.end_angle = kAngles[i][1];
+        arc.color = lv_color_hex(kColors[i]);
+        arc.opa = static_cast<int>(i) == _action_wheel_selection ? 245 : 72;
+        lv_draw_arc(layer, &arc);
+    }
+
+    arc.radius = 205;
+    arc.width = 2;
+    arc.start_angle = 0;
+    arc.end_angle = 360;
+    arc.color = lv_color_hex(0x29415F);
+    arc.opa = 150;
+    lv_draw_arc(layer, &arc);
+}
+
+void CodexView::initTaskList()
+{
+    _task_list_canvas = std::make_unique<Container>(_panel->get());
+    _task_list_canvas->setSize(kScreenSize, kScreenSize);
+    _task_list_canvas->align(LV_ALIGN_CENTER, 0, 0);
+    _task_list_canvas->setBgColor(lv_color_hex(0x02050A));
+    _task_list_canvas->setBgOpa(252);
+    _task_list_canvas->setBorderWidth(0);
+    _task_list_canvas->setPaddingAll(0);
+    _task_list_canvas->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+
+    _task_list_title = std::make_unique<Label>(_task_list_canvas->get());
+    _task_list_title->setText("UNREAD TASKS");
+    _task_list_title->setTextFont(&lv_font_montserrat_22);
+    _task_list_title->setTextColor(lv_color_hex(kOwBlue));
+    _task_list_title->setWidth(280);
+    _task_list_title->setTextAlign(LV_TEXT_ALIGN_CENTER);
+    _task_list_title->align(LV_ALIGN_TOP_MID, 0, 58);
+
+    for (size_t i = 0; i < _task_row_buttons.size(); ++i) {
+        auto row = std::make_unique<Container>(_task_list_canvas->get());
+        row->setSize(344, 42);
+        row->align(LV_ALIGN_TOP_MID, 0, 102 + static_cast<int>(i) * 48);
+        row->setRadius(15);
+        row->setBgColor(lv_color_hex(i == 0 ? 0x102B43 : kOwPanel));
+        row->setBgOpa(245);
+        row->setBorderWidth(1);
+        row->setBorderColor(lv_color_hex(i == 0 ? kOwBlue : 0x26374C));
+        row->setPaddingAll(0);
+        row->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        row->onClick().connect([this, i]() {
+            if (i >= _unread_tasks.size()) {
+                return;
+            }
+            _task_open_request = _unread_tasks[i].id;
+            setTaskListVisible(false);
+            GetHAL().vibrate(45, 85);
+        });
+
+        auto label = std::make_unique<Label>(row->get());
+        label->setText("");
+#if CONFIG_LV_FONT_SOURCE_HAN_SANS_SC_16_CJK
+        label->setTextFont(&lv_font_source_han_sans_sc_16_cjk);
+#else
+        label->setTextFont(&lv_font_montserrat_16);
+#endif
+        label->setTextColor(lv_color_hex(kColorText));
+        label->setWidth(304);
+        label->setTextAlign(LV_TEXT_ALIGN_LEFT);
+        label->align(LV_ALIGN_LEFT_MID, 16, 0);
+        lv_label_set_long_mode(label->get(), LV_LABEL_LONG_MODE_DOTS);
+        label->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        _task_row_buttons[i] = std::move(row);
+        _task_row_labels[i] = std::move(label);
+    }
+
+    _task_list_back_button = std::make_unique<Container>(_task_list_canvas->get());
+    _task_list_back_button->setSize(132, 38);
+    _task_list_back_button->align(LV_ALIGN_BOTTOM_MID, 0, -40);
+    _task_list_back_button->setRadius(19);
+    _task_list_back_button->setBgColor(lv_color_hex(0x121C29));
+    _task_list_back_button->setBgOpa(250);
+    _task_list_back_button->setBorderWidth(1);
+    _task_list_back_button->setBorderColor(lv_color_hex(0x39506B));
+    _task_list_back_button->setPaddingAll(0);
+    _task_list_back_button->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _task_list_back_button->onClick().connect([this]() {
+        setTaskListVisible(false);
+        GetHAL().vibrate(25, 55);
+    });
+
+    _task_list_back_label = std::make_unique<Label>(_task_list_back_button->get());
+    _task_list_back_label->setText("BACK");
+    _task_list_back_label->setTextFont(&lv_font_montserrat_16);
+    _task_list_back_label->setTextColor(lv_color_hex(kOwSoftText));
+    _task_list_back_label->align(LV_ALIGN_CENTER, 0, 0);
+
+    updateTaskListRows();
+    setTaskListVisible(false);
+}
+
+void CodexView::setTaskListVisible(bool visible)
+{
+    if (!_task_list_canvas) {
+        return;
+    }
+    _task_list_active = visible;
+    _task_list_canvas->setHidden(!visible);
+    if (visible) {
+        updateTaskListRows();
+        _task_list_canvas->moveForeground();
+    }
+}
+
+void CodexView::updateTaskListRows()
+{
+    for (size_t i = 0; i < _task_row_buttons.size(); ++i) {
+        if (!_task_row_buttons[i] || !_task_row_labels[i]) {
+            continue;
+        }
+        const bool available = i < _unread_tasks.size();
+        _task_row_buttons[i]->setHidden(!available);
+        if (!available) {
+            continue;
+        }
+        char prefix[8] = {};
+        std::snprintf(prefix, sizeof(prefix), "%u  ", static_cast<unsigned>(i + 1));
+        _task_row_labels[i]->setText((std::string(prefix) + _unread_tasks[i].title).c_str());
+    }
+}
+
+void CodexView::initReasoningControl()
+{
+    _reasoning_canvas = std::make_unique<Container>(_panel->get());
+    _reasoning_canvas->setSize(kScreenSize, kScreenSize);
+    _reasoning_canvas->align(LV_ALIGN_CENTER, 0, 0);
+    _reasoning_canvas->setBgOpa(LV_OPA_TRANSP);
+    _reasoning_canvas->setBorderWidth(0);
+    _reasoning_canvas->setPaddingAll(0);
+    _reasoning_canvas->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(_reasoning_canvas->get(), &CodexView::drawReasoningControlEvent,
+                        LV_EVENT_DRAW_MAIN_BEGIN, this);
+
+    _reasoning_panel = std::make_unique<Container>(_reasoning_canvas->get());
+    _reasoning_panel->setSize(250, 70);
+    _reasoning_panel->align(LV_ALIGN_TOP_MID, 0, 42);
+    _reasoning_panel->setRadius(24);
+    _reasoning_panel->setBgColor(lv_color_hex(0x09121D));
+    _reasoning_panel->setBgOpa(245);
+    _reasoning_panel->setBorderWidth(1);
+    _reasoning_panel->setBorderColor(lv_color_hex(0x304866));
+    _reasoning_panel->setPaddingAll(0);
+    _reasoning_panel->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+
+    _reasoning_label = std::make_unique<Label>(_reasoning_panel->get());
+    _reasoning_label->setText("REASONING\n<  --  >");
+    _reasoning_label->setTextFont(&lv_font_montserrat_16);
+    _reasoning_label->setTextColor(lv_color_hex(kColorText));
+    _reasoning_label->setWidth(224);
+    _reasoning_label->setTextAlign(LV_TEXT_ALIGN_CENTER);
+    _reasoning_label->align(LV_ALIGN_CENTER, 0, 1);
+
+    setReasoningControlVisible(false);
+}
+
+void CodexView::updateReasoningGesture()
+{
+    lv_indev_t* indev = GetHAL().lvTouchpad;
+    if (!indev || _task_list_active || _action_wheel_active) {
+        return;
+    }
+    const lv_indev_state_t state = lv_indev_get_state(indev);
+    lv_point_t point = {0, 0};
+    lv_indev_get_point(indev, &point);
+
+    if (state == LV_INDEV_STATE_PR) {
+        if (!_reasoning_touch_tracking) {
+            if (_voice_mode == VoiceMode::Idle &&
+                point.x >= kReasoningTouchMinX && point.x <= kReasoningTouchMaxX &&
+                point.y >= kReasoningTouchMinY && point.y <= kReasoningTouchMaxY) {
+                _reasoning_touch_tracking = true;
+                _reasoning_touch_start_x = point.x;
+                _reasoning_swipe_direction = 0;
+                _reasoning_swipe_step = 0;
+                setReasoningControlVisible(true);
+                GetHAL().vibrate(18, 40);
+            }
+            return;
+        }
+
+        const int dx = point.x - _reasoning_touch_start_x;
+        const int step = std::clamp(dx / kReasoningSwipeThreshold, -6, 6);
+        if (step != _reasoning_swipe_step) {
+            const int delta = step - _reasoning_swipe_step;
+            _reasoning_swipe_step = step;
+            _reasoning_swipe_direction = (step > 0) - (step < 0);
+            _reasoning_delta_request += delta;
+            updateReasoningControlLabel();
+            if (delta != 0) {
+                GetHAL().vibrate(25, 55);
+            }
+        }
+        return;
+    }
+
+    if (!_reasoning_touch_tracking) {
+        return;
+    }
+    setReasoningControlVisible(false);
+    _reasoning_touch_tracking = false;
+    _reasoning_touch_start_x = 0;
+    _reasoning_swipe_direction = 0;
+    _reasoning_swipe_step = 0;
+}
+
+void CodexView::setReasoningControlVisible(bool visible)
+{
+    if (!_reasoning_canvas) {
+        return;
+    }
+    _reasoning_canvas->setHidden(!visible);
+    if (visible) {
+        updateReasoningControlLabel();
+        _reasoning_canvas->moveForeground();
+        lv_obj_invalidate(_reasoning_canvas->get());
+    }
+}
+
+void CodexView::updateReasoningControlLabel()
+{
+    if (!_reasoning_label) {
+        return;
+    }
+    if (_reasoning_swipe_direction < 0) {
+        const std::string step = std::to_string(std::abs(_reasoning_swipe_step));
+        _reasoning_label->setText(("REASONING\n<  LOWER -" + step).c_str());
+        _reasoning_label->setTextColor(lv_color_hex(kOwAmber));
+    } else if (_reasoning_swipe_direction > 0) {
+        const std::string step = std::to_string(_reasoning_swipe_step);
+        _reasoning_label->setText(("REASONING\nHIGHER +" + step + "  >").c_str());
+        _reasoning_label->setTextColor(lv_color_hex(0x9A7BFF));
+    } else {
+        std::string label = _state.reasoningLabel.empty() ? "--" : _state.reasoningLabel;
+        std::transform(label.begin(), label.end(), label.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::toupper(ch));
+        });
+        _reasoning_label->setText(("REASONING\n<  " + label + "  >").c_str());
+        _reasoning_label->setTextColor(lv_color_hex(kColorText));
+    }
+    if (_reasoning_canvas) {
+        lv_obj_invalidate(_reasoning_canvas->get());
+    }
+}
+
+void CodexView::drawReasoningControlEvent(lv_event_t* event)
+{
+    auto* view = static_cast<CodexView*>(lv_event_get_user_data(event));
+    if (!view || lv_event_get_code(event) != LV_EVENT_DRAW_MAIN_BEGIN) {
+        return;
+    }
+    lv_obj_t* obj = lv_event_get_target_obj(event);
+    lv_layer_t* layer = lv_event_get_layer(event);
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+    view->drawReasoningControl(layer, coords);
+}
+
+void CodexView::drawReasoningControl(lv_layer_t* layer, const lv_area_t& coords)
+{
+    lv_draw_arc_dsc_t arc;
+    lv_draw_arc_dsc_init(&arc);
+    arc.center = {
+        static_cast<lv_coord_t>(coords.x1 + kScreenCenter),
+        static_cast<lv_coord_t>(coords.y1 + kScreenCenter),
+    };
+    arc.radius = 216;
+    arc.width = 9;
+    arc.rounded = 1;
+
+    arc.start_angle = 225;
+    arc.end_angle = 270;
+    arc.color = lv_color_hex(kOwBlue);
+    arc.opa = _reasoning_swipe_direction < 0 ? 250 : 90;
+    lv_draw_arc(layer, &arc);
+
+    arc.start_angle = 270;
+    arc.end_angle = 315;
+    arc.color = lv_color_hex(0x9A7BFF);
+    arc.opa = _reasoning_swipe_direction > 0 ? 250 : 90;
+    lv_draw_arc(layer, &arc);
+}
+
+void CodexView::initFlipClock()
+{
+    _clock_panel = std::make_unique<Container>(_panel->get());
+    _clock_panel->align(LV_ALIGN_TOP_MID, 0, 0);
+    _clock_panel->setSize(154, 66);
+    _clock_panel->setBgOpa(LV_OPA_TRANSP);
+    _clock_panel->setBorderWidth(0);
+    _clock_panel->setPaddingAll(0);
+    _clock_panel->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+
+    _clock_hour_panel = std::make_unique<Container>(_clock_panel->get());
+    setup_clock_digit_panel(*_clock_hour_panel, -40);
+    _clock_hour_flow = std::make_unique<NumberFlow>(_clock_hour_panel->get());
+    setup_clock_flow(*_clock_hour_flow);
+
+    _clock_minute_panel = std::make_unique<Container>(_clock_panel->get());
+    setup_clock_digit_panel(*_clock_minute_panel, 40);
+    _clock_minute_flow = std::make_unique<NumberFlow>(_clock_minute_panel->get());
+    setup_clock_flow(*_clock_minute_flow);
+
+    _clock_colon = std::make_unique<Label>(_clock_panel->get());
+    _clock_colon->setText(":");
+    _clock_colon->setTextFont(&lv_font_montserrat_36);
+    _clock_colon->setTextColor(lv_color_hex(kColorClock));
+    _clock_colon->align(LV_ALIGN_TOP_MID, 0, 12);
+
+    updateFlipClock(true);
+}
+
+void CodexView::updateFlipClock(bool force)
+{
+    if (_clock_hour_flow) {
+        _clock_hour_flow->update();
+    }
+    if (_clock_minute_flow) {
+        _clock_minute_flow->update();
+    }
+
+    const uint32_t now_ms = GetHAL().millis();
+    if (!force && now_ms - _last_clock_tick <= 1000) {
+        return;
+    }
+    _last_clock_tick = now_ms;
+
+    std::time_t now    = std::time(nullptr);
+    std::tm* localTime = std::localtime(&now);
+    if (localTime == nullptr) {
+        return;
+    }
+
+    if (_clock_hour_flow) {
+        _clock_hour_flow->setValue(localTime->tm_hour);
+    }
+    if (_clock_minute_flow) {
+        _clock_minute_flow->setValue(localTime->tm_min);
+    }
+}
+
+void CodexView::initSemicircleQuota()
+{
+    _semicircle_quota.canvas = std::make_unique<Container>(_panel->get());
+    _semicircle_quota.canvas->setSize(kScreenSize, kScreenSize);
+    _semicircle_quota.canvas->align(LV_ALIGN_CENTER, 0, 0);
+    _semicircle_quota.canvas->setBgOpa(LV_OPA_TRANSP);
+    _semicircle_quota.canvas->setBorderWidth(0);
+    _semicircle_quota.canvas->setPaddingAll(0);
+    _semicircle_quota.canvas->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _semicircle_quota.canvas->removeFlag(LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(_semicircle_quota.canvas->get(),
+                        &CodexView::drawSemicircleQuotaEvent,
+                        LV_EVENT_DRAW_MAIN_BEGIN,
+                        this);
+
+    auto setup_caption = [](Label& label, const char* text, uint32_t color, int x) {
+        label.setText(text);
+        label.setTextFont(&lv_font_montserrat_18);
+        label.setTextColor(lv_color_hex(color));
+        label.setWidth(kQuotaEndpointLabelWidth);
+        label.setTextAlign(LV_TEXT_ALIGN_CENTER);
+        label.align(LV_ALIGN_TOP_LEFT, x, kQuotaCaptionY);
+    };
+
+    auto setup_value = [](Label& label, uint32_t color, int x) {
+        label.setText("--%");
+        label.setTextFont(&MontserratSemiBold26);
+        label.setTextColor(lv_color_hex(color));
+        label.setWidth(kQuotaEndpointLabelWidth);
+        label.setTextAlign(LV_TEXT_ALIGN_CENTER);
+        label.align(LV_ALIGN_TOP_LEFT, x, kQuotaValueY);
+    };
+
+    _semicircle_quota.todayCaption = std::make_unique<Label>(_panel->get());
+    setup_caption(*_semicircle_quota.todayCaption, "TODAY", kColorTodayText, kQuotaLeftLabelX);
+    _semicircle_quota.todayValue = std::make_unique<Label>(_panel->get());
+    setup_value(*_semicircle_quota.todayValue, kColorTodayText, kQuotaLeftLabelX);
+
+    _semicircle_quota.remainingCaption = std::make_unique<Label>(_panel->get());
+    setup_caption(*_semicircle_quota.remainingCaption, "LEFT", kColorWeekText, kQuotaRightLabelX);
+    _semicircle_quota.remainingValue = std::make_unique<Label>(_panel->get());
+    setup_value(*_semicircle_quota.remainingValue, kColorWeekText, kQuotaRightLabelX);
+
+    _semicircle_quota.resetLabel = std::make_unique<Label>(_panel->get());
+    _semicircle_quota.resetLabel->setText("--");
+    _semicircle_quota.resetLabel->setTextFont(&lv_font_montserrat_22);
+    _semicircle_quota.resetLabel->setTextColor(lv_color_hex(kColorTextDim));
+    _semicircle_quota.resetLabel->setWidth(130);
+    _semicircle_quota.resetLabel->setTextAlign(LV_TEXT_ALIGN_CENTER);
+    _semicircle_quota.resetLabel->align(LV_ALIGN_TOP_LEFT, 168, 394);
+}
+
+void CodexView::updateSemicircleQuota()
+{
+    const int remaining = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
+    const bool has_daily_baseline = _state.weeklyDayStartLeftPct >= 0;
+    const int today_used = std::max(0, _state.weeklyTodayUsedPctPoints);
+
+    if (_semicircle_quota.remainingValue) {
+        char value[8];
+        std::snprintf(value, sizeof(value), "%d%%", remaining);
+        _semicircle_quota.remainingValue->setText(value);
+    }
+    if (_semicircle_quota.todayValue) {
+        char value[16];
+        if (has_daily_baseline) {
+            std::snprintf(value, sizeof(value), "%d%%", today_used);
+        } else {
+            std::snprintf(value, sizeof(value), "--%%");
+        }
+        _semicircle_quota.todayValue->setText(value);
+    }
+    if (_semicircle_quota.resetLabel) {
+        _semicircle_quota.resetLabel->setText(_state.weekly.resetInLabel.c_str());
+    }
+    if (_semicircle_quota.canvas) {
+        lv_obj_invalidate(_semicircle_quota.canvas->get());
+    }
+}
+
+void CodexView::drawSemicircleQuotaEvent(lv_event_t* event)
+{
+    auto* view = static_cast<CodexView*>(lv_event_get_user_data(event));
+    if (view == nullptr || lv_event_get_code(event) != LV_EVENT_DRAW_MAIN_BEGIN) {
+        return;
+    }
+
+    lv_obj_t* obj = lv_event_get_target_obj(event);
+    lv_layer_t* layer = lv_event_get_layer(event);
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+    view->drawSemicircleQuota(layer, coords);
+}
+
+void CodexView::drawSemicircleQuota(lv_layer_t* layer, const lv_area_t& coords)
+{
+    const float remaining = remainingRatio(_state.weekly);
+    const float today = _state.weeklyDayStartLeftPct >= 0
+        ? clamp01(static_cast<float>(_state.weeklyTodayUsedPctPoints) / 100.0f)
+        : 0.0f;
+    const float today_end = std::min(1.0f, remaining + today);
+
+    lv_draw_arc_dsc_t arc;
+    lv_draw_arc_dsc_init(&arc);
+    arc.center = {
+        static_cast<lv_coord_t>(coords.x1 + kScreenCenter),
+        static_cast<lv_coord_t>(coords.y1 + kScreenCenter),
+    };
+    arc.radius = kQuotaRadius;
+    arc.width = kQuotaWidth;
+    arc.rounded = 1;
+    arc.start_angle = 0;
+    arc.end_angle = 180;
+    arc.color = lv_color_hex(kColorTrack);
+    arc.opa = 230;
+    lv_draw_arc(layer, &arc);
+
+    const int remaining_end_angle = static_cast<int>(std::lround(180.0f * remaining));
+    if (remaining_end_angle > 0) {
+        arc.start_angle = 0;
+        arc.end_angle = remaining_end_angle;
+        arc.color = lv_color_hex(kColorWeek);
+        arc.opa = 245;
+        lv_draw_arc(layer, &arc);
+    }
+
+    const int today_end_angle = static_cast<int>(std::lround(180.0f * today_end));
+    if (today_end_angle > remaining_end_angle) {
+        arc.start_angle = remaining_end_angle;
+        arc.end_angle = today_end_angle;
+        arc.color = lv_color_hex(kColorToday);
+        arc.opa = 245;
+        lv_draw_arc(layer, &arc);
+    }
+
+    const auto draw_gradient_boundary = [&](int boundary_angle,
+                                            int left_available,
+                                            int right_available,
+                                            uint32_t left_color,
+                                            uint32_t right_color) {
+        const int half_angle = std::min({kQuotaGradientHalfAngle, left_available, right_available});
+        if (half_angle <= 0) {
+            return;
+        }
+
+        const int start_angle = boundary_angle - half_angle;
+        const int end_angle = boundary_angle + half_angle;
+        arc.rounded = 0;
+        arc.opa = 245;
+        for (int angle = start_angle; angle < end_angle; ++angle) {
+            const float mix = static_cast<float>(angle - start_angle) /
+                              static_cast<float>(end_angle - start_angle);
+            arc.start_angle = angle;
+            arc.end_angle = angle + 1;
+            arc.color = lv_color_hex(blendRgb(left_color, right_color, mix));
+            lv_draw_arc(layer, &arc);
+        }
+    };
+
+    const bool has_today_segment = today_end_angle > remaining_end_angle;
+    const int next_boundary = has_today_segment ? today_end_angle : 180;
+    draw_gradient_boundary(remaining_end_angle,
+                           remaining_end_angle,
+                           next_boundary - remaining_end_angle,
+                           kColorWeek,
+                           has_today_segment ? kColorToday : kColorTrack);
+
+    if (has_today_segment && today_end_angle < 180) {
+        draw_gradient_boundary(today_end_angle,
+                               today_end_angle - remaining_end_angle,
+                               180 - today_end_angle,
+                               kColorToday,
+                               kColorTrack);
+    }
+}
+
+void CodexView::initCodexMicroDashboard()
+{
+    _micro_canvas = std::make_unique<Container>(_panel->get());
+    _micro_canvas->setSize(kScreenSize, kScreenSize);
+    _micro_canvas->align(LV_ALIGN_CENTER, 0, 0);
+    _micro_canvas->setBgOpa(LV_OPA_TRANSP);
+    _micro_canvas->setBorderWidth(0);
+    _micro_canvas->setPaddingAll(0);
+    _micro_canvas->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _micro_canvas->removeFlag(LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(_micro_canvas->get(),
+                        &CodexView::drawCodexMicroDashboardEvent,
+                        LV_EVENT_DRAW_MAIN_BEGIN,
+                        this);
+
+    auto make_center_label = [this](std::unique_ptr<Label>& target,
+                                    const char* text,
+                                    const lv_font_t* font,
+                                    uint32_t color,
+                                    int y,
+                                    int width) {
+        target = std::make_unique<Label>(_panel->get());
+        target->setText(text);
+        target->setTextFont(font);
+        target->setTextColor(lv_color_hex(color));
+        target->setWidth(width);
+        target->setTextAlign(LV_TEXT_ALIGN_CENTER);
+        target->align(LV_ALIGN_TOP_MID, 0, y);
+        target->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        target->setBgOpa(LV_OPA_TRANSP);
+        target->setBorderWidth(0);
+    };
+
+    make_center_label(_micro_health_label, "OFFLINE", &lv_font_montserrat_16,
+                      kMicroDanger, 157, 180);
+    make_center_label(_micro_caption_label, "WAITING CODEX", &lv_font_montserrat_14,
+                      kMicroMuted, 187, 190);
+    make_center_label(_micro_quota_label, "--", &lv_font_montserrat_48,
+                      kMicroText, 207, 170);
+    make_center_label(_micro_reset_label, "NO QUOTA DATA", &lv_font_montserrat_14,
+                      kMicroMuted, 267, 190);
+    make_center_label(_micro_weekly_label, "WK --", &lv_font_montserrat_14,
+                      kMicroMuted, 292, 190);
+    make_center_label(_micro_transient_label, "", &lv_font_montserrat_18,
+                      kMicroAccent, 226, 210);
+    _micro_transient_label->setHidden(true);
+
+    for (size_t index = 0; index < _micro_agent_labels.size(); ++index) {
+        auto label = std::make_unique<Label>(_panel->get());
+        char text[4] = {};
+        std::snprintf(text, sizeof(text), "A%u", static_cast<unsigned>(index + 1));
+        label->setText(text);
+        label->setTextFont(&lv_font_montserrat_20);
+        label->setTextColor(lv_color_hex(kMicroMuted));
+        label->setWidth(72);
+        label->setTextAlign(LV_TEXT_ALIGN_CENTER);
+        label->align(LV_ALIGN_TOP_LEFT,
+                     kMicroAgentCenters[index].x - 36,
+                     kMicroAgentCenters[index].y - 13);
+        label->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        label->setBgOpa(LV_OPA_TRANSP);
+        label->setBorderWidth(0);
+        _micro_agent_labels[index] = std::move(label);
+    }
+}
+
+bool CodexView::codexLiveActive() const
+{
+    // The host-RPC flag alone stays true as long as the bridge process is
+    // alive, even when the Codex client on the host is closed. Require the
+    // quota stream to be fresh as well: the bridge stops pushing panels when
+    // Codex is gone, and cached/stale snapshots never count as live.
+    if (!_native_codex_communicating || _state.stale) {
+        return false;
+    }
+    if (_last_quota_update_tick == 0) {
+        return false;
+    }
+    return (GetHAL().millis() - _last_quota_update_tick) < kCodexLiveTimeoutMs;
+}
+
+void CodexView::updateCodexMicroDashboardLabels()
+{
+    if (_theme_mode != ThemeMode::CodexMicroDashboard || !_micro_health_label) {
+        return;
+    }
+
+    const bool link_present = _native_agents_ready || _state.bleConnected;
+    const bool codex_live = codexLiveActive();
+    const char* health = codex_live
+                             ? "CODEX LIVE"
+                             : (link_present ? "BLE ONLY" : "OFFLINE");
+    const uint32_t health_color = codex_live
+                                      ? kMicroAccent
+                                      : (link_present ? 0x4292F5 : kMicroDanger);
+    setLabelTextIfChanged(*_micro_health_label, health);
+    _micro_health_label->setTextColor(lv_color_hex(health_color));
+
+    const bool session_valid = _state.session5hLeftPct >= 0;
+    // Caption always speaks the 5h language. When 5h is not synced we say so
+    // explicitly ("WAITING 5H") instead of relabeling the dial as weekly.
+    const char* caption;
+    if (_state.stale) {
+        caption = "SYNC STALE";
+    } else if (!link_present) {
+        caption = "WAITING CODEX";
+    } else if (!session_valid) {
+        caption = "WAITING 5H";
+    } else {
+        caption = "5H LEFT";
+    }
+    setLabelTextIfChanged(*_micro_caption_label, caption);
+    _micro_caption_label->setTextColor(lv_color_hex(_state.stale ? kMicroWarning : kMicroMuted));
+
+    const int week_pct = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
+    // The center number shows the 5h session remaining only. Weekly quota is a
+    // slow variable with different semantics and must never stand in for 5h;
+    // when 5h is not synced, show "--" and a clear waiting message instead.
+    if (session_valid) {
+        setLabelTextIfChanged(*_micro_quota_label,
+                              std::to_string(_state.session5hLeftPct) + "%");
+        setLabelTextIfChanged(*_micro_reset_label,
+                              std::string("RESET ") +
+                                  (_state.session5hResetLabel.empty()
+                                       ? "--"
+                                       : _state.session5hResetLabel));
+    } else {
+        setLabelTextIfChanged(*_micro_quota_label, "--");
+        setLabelTextIfChanged(*_micro_reset_label,
+                              _state.stale ? "CHECK COMPANION"
+                                           : (link_present ? "WAITING 5H" : "NO QUOTA DATA"));
+    }
+    const bool session_low = session_valid && _state.session5hLeftPct <= 20;
+    _micro_quota_label->setTextColor(
+        lv_color_hex(_state.stale ? kMicroMuted
+                                  : (session_valid
+                                         ? (session_low ? kMicroWarning : kMicroText)
+                                         : kMicroMuted)));
+
+    if (_state.quotaValid) {
+        const std::string weekly_line =
+            "WK " + std::to_string(week_pct) + "% - " +
+            (_state.weekly.resetInLabel.empty() ? "--" : _state.weekly.resetInLabel);
+        setLabelTextIfChanged(*_micro_weekly_label, weekly_line);
+        _micro_weekly_label->setTextColor(lv_color_hex(_state.stale ? kMicroMuted
+                                                                     : kMicroWeeklyText));
+    } else {
+        setLabelTextIfChanged(*_micro_weekly_label, "WK --");
+        _micro_weekly_label->setTextColor(lv_color_hex(kMicroMuted));
+    }
+
+    const char* transient = nullptr;
+    uint32_t transient_color = kMicroAccent;
+    char completed[24] = {};
+    if (_voice_mode == VoiceMode::Interrupted) {
+        transient = "MIC LOST - PRESS A";
+        transient_color = kMicroDanger;
+    } else if (_micro_left_pressed || _voice_mode == VoiceMode::Recording) {
+        transient = "LISTENING";
+    } else if (_micro_right_pressed) {
+        transient = "VOICE CHAT";
+    } else if (_micro_send_candidate) {
+        transient = "SEND";
+        transient_color = kMicroText;
+    } else if (_micro_swipe_direction >= 0) {
+        static constexpr std::array<const char*, 4> kSwipe = {
+            "STICK / UP", "STICK / RIGHT", "STICK / DOWN", "STICK / LEFT"};
+        transient = kSwipe[static_cast<size_t>(_micro_swipe_direction)];
+    } else if (_voice_mode == VoiceMode::Processing || _state.processing) {
+        transient = "PROCESSING";
+        transient_color = kMicroWarning;
+    } else if (_micro_completed_agent >= 0) {
+        std::snprintf(completed, sizeof(completed), "A%d DONE", _micro_completed_agent + 1);
+        transient = completed;
+    } else if (!_state.message.empty()) {
+        transient = _state.message.c_str();
+    }
+    if (transient) {
+        setLabelTextIfChanged(*_micro_transient_label, transient);
+        _micro_transient_label->setTextColor(lv_color_hex(transient_color));
+        setHiddenIfChanged(*_micro_transient_label, false);
+    } else {
+        setHiddenIfChanged(*_micro_transient_label, true);
+    }
+
+    for (size_t index = 0; index < _micro_agent_labels.size(); ++index) {
+        const auto& agent = _native_agents[index];
+        const uint32_t fill = microAgentFill(agent);
+        const int red = static_cast<int>((fill >> 16) & 0xFF);
+        const int green = static_cast<int>((fill >> 8) & 0xFF);
+        const int blue = static_cast<int>(fill & 0xFF);
+        const int luminance = (red * 77 + green * 150 + blue * 29) >> 8;
+        _micro_agent_labels[index]->setTextColor(
+            lv_color_hex(classifyMicroAgent(agent) == MicroAgentStatus::Unassigned
+                             ? kMicroMuted
+                             : (luminance > 150 ? 0x0D1218 : kMicroText)));
+    }
+
+    if (_message_label) {
+        _message_label->setHidden(true);
+    }
+}
+
+int CodexView::codexMicroAgentAt(int x, int y) const
+{
+    for (size_t index = 0; index < kMicroAgentCenters.size(); ++index) {
+        const int dx = x - kMicroAgentCenters[index].x;
+        const int dy = y - kMicroAgentCenters[index].y;
+        if (dx * dx + dy * dy <= (kMicroAgentRadius + 4) * (kMicroAgentRadius + 4)) {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
+}
+
+void CodexView::updateCodexMicroDashboardTouch()
+{
+    lv_indev_t* indev = GetHAL().lvTouchpad;
+    if (!indev) {
+        return;
+    }
+    const lv_indev_state_t state = lv_indev_get_state(indev);
+    lv_point_t point = {0, 0};
+    lv_indev_get_point(indev, &point);
+    const uint32_t now = GetHAL().millis();
+
+    if (state == LV_INDEV_STATE_PR) {
+        if (!_micro_touch_tracking) {
+            _micro_touch_tracking = true;
+            _micro_touch_start_x = point.x;
+            _micro_touch_start_y = point.y;
+            _native_agent_touch_candidate = codexMicroAgentAt(point.x, point.y);
+            _native_agent_touch_started_at = now;
+            _native_agent_touch_committed = false;
+            const int center_dx = point.x - kMicroCenterX;
+            const int center_dy = point.y - kMicroCenterY;
+            _micro_send_candidate = _native_agent_touch_candidate < 0 &&
+                                    center_dx * center_dx + center_dy * center_dy <=
+                                        kMicroDialRadius * kMicroDialRadius;
+            _micro_swipe_active = false;
+            _micro_swipe_direction = -1;
+            GetHAL().vibrate(14, 35);
+            updateCodexMicroDashboardLabels();
+            if (_micro_canvas) {
+                lv_obj_invalidate(_micro_canvas->get());
+            }
+            return;
+        }
+
+        const int dx = point.x - _micro_touch_start_x;
+        const int dy = point.y - _micro_touch_start_y;
+        if (!_micro_swipe_active && dx * dx + dy * dy >= kMicroSwipeThreshold * kMicroSwipeThreshold) {
+            _micro_swipe_active = true;
+            _micro_send_candidate = false;
+            _native_agent_touch_candidate = -1;
+            if (std::abs(dx) >= std::abs(dy)) {
+                _micro_swipe_direction = dx >= 0 ? 1 : 3;
+            } else {
+                _micro_swipe_direction = dy >= 0 ? 2 : 0;
+            }
+            static constexpr std::array<float, 4> kAngles = {0.75f, 0.0f, 0.25f, 0.5f};
+            queueNativeRadial(kAngles[static_cast<size_t>(_micro_swipe_direction)], 1.0f);
+            GetHAL().vibrate(24, 55);
+        }
+
+        if (!_micro_swipe_active && _native_agent_touch_candidate >= 0 &&
+            !_native_agent_touch_committed &&
+            now - _native_agent_touch_started_at >= kNativeAgentHoldMs) {
+            _native_agent_touch_committed = true;
+            _native_agent_slot_request = _native_agent_touch_candidate;
+            GetHAL().vibrate(35, 75);
+        }
+        updateCodexMicroDashboardLabels();
+        if (_micro_canvas) {
+            lv_obj_invalidate(_micro_canvas->get());
+        }
+        return;
+    }
+
+    if (!_micro_touch_tracking) {
+        return;
+    }
+    if (_micro_swipe_active) {
+        static constexpr std::array<float, 4> kAngles = {0.75f, 0.0f, 0.25f, 0.5f};
+        queueNativeRadial(kAngles[static_cast<size_t>(_micro_swipe_direction)], 0.0f);
+    } else if (_micro_send_candidate) {
+        _native_action_request = 12;
+        GetHAL().vibrate(35, 75);
+    }
+    _micro_touch_tracking = false;
+    _micro_send_candidate = false;
+    _micro_swipe_active = false;
+    _micro_swipe_direction = -1;
+    _native_agent_touch_candidate = -1;
+    _native_agent_touch_committed = false;
+    updateCodexMicroDashboardLabels();
+    if (_micro_canvas) {
+        lv_obj_invalidate(_micro_canvas->get());
+    }
+}
+
+void CodexView::drawCodexMicroDashboardEvent(lv_event_t* event)
+{
+    auto* view = static_cast<CodexView*>(lv_event_get_user_data(event));
+    if (!view || lv_event_get_code(event) != LV_EVENT_DRAW_MAIN_BEGIN) {
+        return;
+    }
+    lv_obj_t* obj = lv_event_get_target_obj(event);
+    lv_layer_t* layer = lv_event_get_layer(event);
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+    view->drawCodexMicroDashboard(layer, coords);
+}
+
+void CodexView::drawCodexMicroDashboard(lv_layer_t* layer, const lv_area_t& coords)
+{
+    lv_draw_arc_dsc_t arc;
+    lv_draw_arc_dsc_init(&arc);
+    arc.center = {static_cast<lv_coord_t>(coords.x1 + kMicroCenterX),
+                  static_cast<lv_coord_t>(coords.y1 + kMicroCenterY)};
+    arc.rounded = 1;
+
+    // Outer ring: weekly quota (teal), track first.
+    arc.radius = kMicroDialRadius;
+    arc.width = 8;
+    arc.start_angle = 0;
+    arc.end_angle = 360;
+    arc.color = lv_color_hex(kMicroTrack);
+    arc.opa = 255;
+    lv_draw_arc(layer, &arc);
+
+    if (_state.quotaValid) {
+        const float remaining = remainingRatio(_state.weekly);
+        const int end_angle = 270 + static_cast<int>(std::lround(360.0f * remaining));
+        arc.start_angle = 270;
+        arc.end_angle = end_angle;
+        arc.color = lv_color_hex(_state.stale
+                                     ? 0x745527
+                                     : (remaining > 0.20f ? kMicroAccent : kMicroWarning));
+        arc.opa = 255;
+        lv_draw_arc(layer, &arc);
+    }
+
+    // Inner ring: 5h session quota (blue), only when the bridge provides it.
+    arc.radius = kMicroSessionDialRadius;
+    arc.width = 8;
+    arc.start_angle = 0;
+    arc.end_angle = 360;
+    arc.color = lv_color_hex(kMicroTrack);
+    arc.opa = 200;
+    lv_draw_arc(layer, &arc);
+
+    if (_state.session5hLeftPct >= 0) {
+        const float session_remaining =
+            static_cast<float>(std::clamp(_state.session5hLeftPct, 0, 100)) / 100.0f;
+        const int end_angle = 270 + static_cast<int>(std::lround(360.0f * session_remaining));
+        arc.start_angle = 270;
+        arc.end_angle = end_angle;
+        arc.color = lv_color_hex(_state.stale
+                                     ? 0x745527
+                                     : (session_remaining > 0.20f ? kMicroSession
+                                                                   : kMicroWarning));
+        arc.opa = 255;
+        lv_draw_arc(layer, &arc);
+    }
+
+    lv_draw_rect_dsc_t rect;
+    lv_draw_rect_dsc_init(&rect);
+    rect.radius = LV_RADIUS_CIRCLE;
+    rect.border_width = 0;
+    for (size_t index = 0; index < kMicroAgentCenters.size(); ++index) {
+        const auto& agent = _native_agents[index];
+        const bool active = _native_agents_ready && agent.assigned && agent.brightness > 0.01f;
+        const bool pressed = _micro_touch_tracking &&
+                             _native_agent_touch_candidate == static_cast<int>(index);
+        const uint32_t fill = active ? microAgentFill(agent) : kMicroPanel;
+        const float brightness = active ? std::clamp(agent.brightness, 0.18f, 1.0f) : 1.0f;
+        lv_area_t outer = {
+            static_cast<lv_coord_t>(coords.x1 + kMicroAgentCenters[index].x - kMicroAgentRadius),
+            static_cast<lv_coord_t>(coords.y1 + kMicroAgentCenters[index].y - kMicroAgentRadius),
+            static_cast<lv_coord_t>(coords.x1 + kMicroAgentCenters[index].x + kMicroAgentRadius),
+            static_cast<lv_coord_t>(coords.y1 + kMicroAgentCenters[index].y + kMicroAgentRadius),
+        };
+        rect.bg_color = lv_color_hex(active ? scaleRgb(fill, brightness * 0.55f) : kMicroTrack);
+        rect.bg_opa = 255;
+        lv_draw_rect(layer, &rect, &outer);
+        lv_area_t inner = {
+            static_cast<lv_coord_t>(outer.x1 + 4),
+            static_cast<lv_coord_t>(outer.y1 + 4),
+            static_cast<lv_coord_t>(outer.x2 - 4),
+            static_cast<lv_coord_t>(outer.y2 - 4),
+        };
+        rect.bg_color = lv_color_hex(active
+                                         ? scaleRgb(fill, brightness * (pressed ? 0.72f : 1.0f))
+                                         : (pressed ? kMicroPanelDown : kMicroPanel));
+        lv_draw_rect(layer, &rect, &inner);
+
+        if (pressed && !_native_agent_touch_committed) {
+            lv_draw_arc_dsc_t hold;
+            lv_draw_arc_dsc_init(&hold);
+            hold.center = {
+                static_cast<lv_coord_t>(coords.x1 + kMicroAgentCenters[index].x),
+                static_cast<lv_coord_t>(coords.y1 + kMicroAgentCenters[index].y),
+            };
+            hold.radius = kMicroAgentRadius + 3;
+            hold.width = 4;
+            hold.rounded = 1;
+            hold.start_angle = 270;
+            const float progress = std::clamp(
+                static_cast<float>(GetHAL().millis() - _native_agent_touch_started_at) /
+                    static_cast<float>(kNativeAgentHoldMs),
+                0.0f,
+                1.0f);
+            hold.end_angle = 270 + static_cast<int>(std::lround(360.0f * progress));
+            hold.color = lv_color_hex(kMicroText);
+            hold.opa = 255;
+            lv_draw_arc(layer, &hold);
+        }
+    }
+}
+
+void CodexView::initOpenWatcherV2()
+{
+    _v2_canvas = std::make_unique<Container>(_panel->get());
+    _v2_canvas->setSize(466, 466);
+    _v2_canvas->align(LV_ALIGN_CENTER, 0, 0);
+    _v2_canvas->setBgOpa(LV_OPA_TRANSP);
+    _v2_canvas->setBorderWidth(0);
+    _v2_canvas->setPaddingAll(0);
+    _v2_canvas->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(_v2_canvas->get(), &CodexView::drawOpenWatcherV2Event, LV_EVENT_DRAW_MAIN_BEGIN, this);
+
+    _v2_title_label = std::make_unique<Label>(_panel->get());
+    _v2_title_label->setText("Codex Offline");
+    _v2_title_label->setTextFont(&lv_font_montserrat_24);
+    _v2_title_label->setTextColor(lv_color_hex(kOwBlue));
+    _v2_title_label->setWidth(280);
+    _v2_title_label->setTextAlign(LV_TEXT_ALIGN_CENTER);
+    _v2_title_label->setLongMode(LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    _v2_title_label->align(LV_ALIGN_TOP_MID, 0, 40);
+
+    _v2_left_caption_label = std::make_unique<Label>(_panel->get());
+    _v2_left_caption_label->setText("WEEK LEFT");
+    _v2_left_caption_label->setTextFont(&lv_font_montserrat_18);
+    _v2_left_caption_label->setTextColor(lv_color_hex(kOwSoftText));
+    _v2_left_caption_label->setWidth(300);
+    _v2_left_caption_label->setTextAlign(LV_TEXT_ALIGN_CENTER);
+    _v2_left_caption_label->align(LV_ALIGN_TOP_MID, 0, 80);
+
+    _v2_remaining_value_label = std::make_unique<Label>(_panel->get());
+    _v2_remaining_value_label->setText("--");
+    _v2_remaining_value_label->setTextFont(&CommissionerMedium64);
+    _v2_remaining_value_label->setTextColor(lv_color_hex(kOwGreen));
+    _v2_remaining_value_label->setWidth(155);
+    _v2_remaining_value_label->setTextAlign(LV_TEXT_ALIGN_RIGHT);
+    _v2_remaining_value_label->align(LV_ALIGN_TOP_LEFT, 130, 107);
+
+    _v2_remaining_unit_label = std::make_unique<Label>(_panel->get());
+    _v2_remaining_unit_label->setText("%");
+    _v2_remaining_unit_label->setTextFont(&lv_font_montserrat_48);
+    _v2_remaining_unit_label->setTextColor(lv_color_hex(kOwGreen));
+    _v2_remaining_unit_label->setWidth(70);
+    _v2_remaining_unit_label->setTextAlign(LV_TEXT_ALIGN_LEFT);
+    _v2_remaining_unit_label->align(LV_ALIGN_TOP_LEFT, 285, 139);
+
+    _v2_today_caption_label = std::make_unique<Label>(_panel->get());
+    _v2_today_caption_label->setText("TODAY");
+    _v2_today_caption_label->setTextFont(&lv_font_montserrat_18);
+    _v2_today_caption_label->setTextColor(lv_color_hex(kOwToday));
+    _v2_today_caption_label->setWidth(100);
+    _v2_today_caption_label->setTextAlign(LV_TEXT_ALIGN_LEFT);
+    _v2_today_caption_label->align(LV_ALIGN_TOP_LEFT, 58, 122);
+
+    _v2_today_value_label = std::make_unique<Label>(_panel->get());
+    _v2_today_value_label->setText("--%");
+    _v2_today_value_label->setTextFont(&lv_font_montserrat_36);
+    _v2_today_value_label->setTextColor(lv_color_hex(kOwToday));
+    _v2_today_value_label->setWidth(110);
+    _v2_today_value_label->setTextAlign(LV_TEXT_ALIGN_LEFT);
+    _v2_today_value_label->align(LV_ALIGN_TOP_LEFT, 55, 145);
+
+    _v2_status_label = std::make_unique<Label>(_panel->get());
+    _v2_status_label->setText("");
+    _v2_status_label->setTextFont(&lv_font_montserrat_22);
+    _v2_status_label->setTextColor(lv_color_hex(kOwBlue));
+    _v2_status_label->setWidth(280);
+    _v2_status_label->setTextAlign(LV_TEXT_ALIGN_CENTER);
+    _v2_status_label->align(LV_ALIGN_TOP_MID, 0, 199);
+    _v2_status_label->setHidden(true);
+
+    _v2_meta_left_label = std::make_unique<Label>(_panel->get());
+    _v2_meta_left_label->setText("5H --");
+    _v2_meta_left_label->setTextFont(&lv_font_montserrat_18);
+    _v2_meta_left_label->setTextColor(lv_color_hex(kOwSoftText));
+    _v2_meta_left_label->setWidth(150);
+    _v2_meta_left_label->setTextAlign(LV_TEXT_ALIGN_LEFT);
+    _v2_meta_left_label->align(LV_ALIGN_TOP_LEFT, 46, 232);
+
+    _v2_meta_right_label = std::make_unique<Label>(_panel->get());
+    _v2_meta_right_label->setText("RESET --");
+    _v2_meta_right_label->setTextFont(&lv_font_montserrat_18);
+    _v2_meta_right_label->setTextColor(lv_color_hex(kOwSoftText));
+    _v2_meta_right_label->setWidth(150);
+    _v2_meta_right_label->setTextAlign(LV_TEXT_ALIGN_RIGHT);
+    _v2_meta_right_label->align(LV_ALIGN_TOP_RIGHT, -46, 232);
+
+    _v2_sync_indicator = std::make_unique<Container>(_panel->get());
+    _v2_sync_indicator->setSize(140, 14);
+    _v2_sync_indicator->align(LV_ALIGN_TOP_MID, 0, 378);
+    _v2_sync_indicator->setBgOpa(LV_OPA_TRANSP);
+    _v2_sync_indicator->setBorderWidth(0);
+    _v2_sync_indicator->setPaddingAll(0);
+    _v2_sync_indicator->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+
+    _v2_sync_left_line = std::make_unique<Container>(_v2_sync_indicator->get());
+    _v2_sync_left_line->setSize(45, 1);
+    _v2_sync_left_line->align(LV_ALIGN_LEFT_MID, 0, 0);
+    _v2_sync_left_line->setBgColor(lv_color_hex(0xA7F000));
+    _v2_sync_left_line->setBgOpa(210);
+    _v2_sync_left_line->setBorderWidth(0);
+
+    _v2_sync_right_line = std::make_unique<Container>(_v2_sync_indicator->get());
+    _v2_sync_right_line->setSize(45, 1);
+    _v2_sync_right_line->align(LV_ALIGN_RIGHT_MID, 0, 0);
+    _v2_sync_right_line->setBgColor(lv_color_hex(0xA7F000));
+    _v2_sync_right_line->setBgOpa(210);
+    _v2_sync_right_line->setBorderWidth(0);
+
+    _v2_sync_dot = std::make_unique<Container>(_v2_sync_indicator->get());
+    _v2_sync_dot->setSize(7, 7);
+    _v2_sync_dot->align(LV_ALIGN_CENTER, 0, 0);
+    _v2_sync_dot->setRadius(LV_RADIUS_CIRCLE);
+    _v2_sync_dot->setBgColor(lv_color_hex(0xC9FF53));
+    _v2_sync_dot->setBgOpa(LV_OPA_COVER);
+    _v2_sync_dot->setBorderWidth(0);
+
+    for (size_t index = 0; index < _v2_agent_hits.size(); ++index) {
+        auto hit = std::make_unique<Container>(_panel->get());
+        hit->setSize(kNativeAgentHitSize, kNativeAgentHitSize);
+        hit->align(LV_ALIGN_TOP_LEFT,
+                   kNativeAgentCenters[index].x - kNativeAgentHitHalf,
+                   kNativeAgentCenters[index].y - kNativeAgentHitHalf);
+        hit->setBgOpa(LV_OPA_TRANSP);
+        hit->setBorderWidth(0);
+        hit->setPaddingAll(0);
+        hit->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        hit->addFlag(LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(hit->get(),
+                            &CodexView::nativeAgentTouchEvent,
+                            LV_EVENT_ALL,
+                            this);
+
+        auto dot = std::make_unique<Container>(hit->get());
+        dot->setSize(10, 10);
+        dot->align(LV_ALIGN_CENTER, 0, 0);
+        dot->setRadius(LV_RADIUS_CIRCLE);
+        dot->setBgColor(lv_color_hex(kOwTrack));
+        dot->setBgOpa(85);
+        dot->setBorderWidth(1);
+        dot->setBorderColor(lv_color_hex(0x42546A));
+        lv_obj_set_style_border_opa(dot->get(), 120, LV_PART_MAIN);
+        dot->setPaddingAll(0);
+        dot->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        dot->removeFlag(LV_OBJ_FLAG_CLICKABLE);
+
+        _v2_agent_hits[index] = std::move(hit);
+        _v2_agent_dots[index] = std::move(dot);
+    }
+    updateNativeAgentRail(true);
+}
+
+void CodexView::updateOpenWatcherV2Labels()
+{
+    if (_theme_mode != ThemeMode::OpenWatcherV2) {
+        return;
+    }
+
+    const int week_pct = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
+    const bool week_valid = _state.quotaValid;
+    const bool session_valid = week_valid && !_state.stale && _state.session5hLeftPct >= 0;
+    if (_v2_title_label) {
+        const bool link_present = _native_agents_ready || _state.bleConnected;
+        const bool codex_live = codexLiveActive();
+        const char* title = codex_live
+                                ? "Codex Ready"
+                                : (link_present ? "Codex Linking" : "Codex Offline");
+        const uint32_t color = codex_live
+                                   ? kOwBlue
+                                   : (link_present ? kOwAmber : kOwStatusIdle);
+        setLabelTextIfChanged(*_v2_title_label, title);
+        _v2_title_label->setTextColor(lv_color_hex(color));
+    }
+    if (_v2_remaining_value_label) {
+        const std::string remaining = week_valid ? std::to_string(week_pct) : "--";
+        setLabelTextIfChanged(*_v2_remaining_value_label, remaining);
+    }
+    if (_v2_left_caption_label) {
+        const std::string reset = week_valid && !_state.weekly.resetInLabel.empty()
+                                      ? _state.weekly.resetInLabel : "--";
+        setLabelTextIfChanged(*_v2_left_caption_label, "WEEK LEFT  " + reset);
+    }
+    if (_v2_today_value_label) {
+        const bool today_valid = _state.weeklyDayStartLeftPct >= 0;
+        const int today_pct = std::clamp(_state.weeklyTodayUsedPctPoints, 0, 100);
+        const std::string today = today_valid ? (std::to_string(today_pct) + "%") : "--%";
+        setLabelTextIfChanged(*_v2_today_value_label, today);
+    }
+    if (_v2_status_label) {
+        const bool interrupted = _voice_mode == VoiceMode::Interrupted;
+        const bool recording = _voice_mode == VoiceMode::Recording;
+        const bool processing = _voice_mode == VoiceMode::Processing || _state.processing;
+        const bool show_status = interrupted || _state.compactWarning || recording || processing;
+        const char* text = interrupted ? "MIC LOST - PRESS A"
+                                       : (_state.compactWarning ? "COMPACT SOON"
+                                                                : (recording ? "LISTENING" : "PROCESSING"));
+        const uint32_t color = interrupted ? kOwToday
+                                           : (_state.compactWarning ? kOwAmber
+                                                                    : (recording ? kOwGreen : (processing ? kOwAmber : kOwBlue)));
+        const char* current = _v2_status_label->getText();
+        if (current == nullptr || std::string_view(current) != text) {
+            _v2_status_label->setText(text);
+            _v2_status_label->setTextColor(lv_color_hex(color));
+        }
+        setHiddenIfChanged(*_v2_status_label, !show_status);
+    }
+    if (_v2_meta_left_label) {
+        const std::string left = session_valid ? std::to_string(_state.session5hLeftPct) + "%" : "--";
+        setLabelTextIfChanged(*_v2_meta_left_label, "5H " + left);
+        _v2_meta_left_label->setTextColor(lv_color_hex(session_valid ? kOwBlue : kOwSoftText));
+    }
+    if (_v2_meta_right_label) {
+        const std::string reset = session_valid && !_state.session5hResetLabel.empty()
+                                      ? _state.session5hResetLabel : "--";
+        setLabelTextIfChanged(*_v2_meta_right_label, "RESET " + reset);
+        _v2_meta_right_label->setTextColor(lv_color_hex(session_valid ? kOwBlue : kOwSoftText));
+    }
+}
+
+void CodexView::updateNativeAgentRail(bool force)
+{
+    if (_theme_mode != ThemeMode::OpenWatcherV2) {
+        return;
+    }
+    const uint32_t now = GetHAL().millis();
+    bool has_animation = false;
+    for (const auto& agent : _native_agents) {
+        has_animation = has_animation ||
+                        (_native_agents_ready && agent.assigned &&
+                         (agent.effect == 4 || agent.effect == 6));
+    }
+    if (!force && (!has_animation || now - _last_native_agent_anim_tick < 250)) {
+        return;
+    }
+    _last_native_agent_anim_tick = now;
+
+    for (size_t index = 0; index < _v2_agent_dots.size(); ++index) {
+        if (!_v2_agent_dots[index]) {
+            continue;
+        }
+        const auto& agent = _native_agents[index];
+        const bool active = _native_agents_ready && agent.assigned;
+        const bool preview = _native_agent_touch_tracking &&
+                             _native_agent_touch_candidate == static_cast<int>(index);
+        uint32_t color = active && agent.color != 0 ? agent.color : kOwTrack;
+        int size = active ? 14 : 10;
+        int opacity = active
+                          ? static_cast<int>(std::lround(175.0f + 80.0f * clamp01(agent.brightness)))
+                          : 72;
+        if (active && (agent.effect == 4 || agent.effect == 6)) {
+            const float period_ms = 2800.0f - 1600.0f * clamp01(agent.speed);
+            const float phase = static_cast<float>(now % static_cast<uint32_t>(period_ms)) /
+                                period_ms;
+            const float pulse = 0.5f + 0.5f * std::sin(phase * 6.28318530718f);
+            if (agent.effect == 4) {
+                size = 13 + static_cast<int>(std::lround(4.0f * pulse));
+                opacity = 120 + static_cast<int>(std::lround(135.0f * pulse));
+            } else {
+                size = 14 + static_cast<int>(std::lround(2.0f * pulse));
+                opacity = 185 + static_cast<int>(std::lround(70.0f * pulse));
+            }
+            opacity = static_cast<int>(std::lround(opacity *
+                                                   (0.45f + 0.55f * clamp01(agent.brightness))));
+        }
+        if (preview) {
+            const uint32_t elapsed = GetHAL().millis() - _native_agent_touch_started_at;
+            const float progress = _native_agent_touch_committed
+                                       ? 1.0f
+                                       : clamp01(static_cast<float>(elapsed) /
+                                                 static_cast<float>(kNativeAgentHoldMs));
+            size = 18 + static_cast<int>(std::lround(8.0f * progress));
+            opacity = 255;
+            color = active && agent.color != 0 ? agent.color : kOwBlue;
+        }
+        opacity = std::clamp(opacity, 40, 255);
+
+        auto& dot = *_v2_agent_dots[index];
+        if (force || _native_agent_dot_sizes[index] != size) {
+            dot.setSize(size, size);
+            dot.align(LV_ALIGN_CENTER, 0, 0);
+            _native_agent_dot_sizes[index] = size;
+        }
+        if (force || _native_agent_dot_colors[index] != color) {
+            dot.setBgColor(lv_color_hex(color));
+            dot.setBorderColor(lv_color_hex(active ? blendRgb(color, 0xFFFFFF, 0.35f)
+                                                   : 0x42546A));
+            dot.setShadowColor(lv_color_hex(color));
+            _native_agent_dot_colors[index] = color;
+        }
+        if (force || _native_agent_dot_opacities[index] != opacity) {
+            dot.setBgOpa(opacity);
+            lv_obj_set_style_border_opa(dot.get(),
+                                        active ? std::min(255, opacity + 20) : 100,
+                                        LV_PART_MAIN);
+            dot.setShadowWidth(preview ? 16 : (active ? 8 : 0));
+            dot.setShadowOpa(preview ? 145 : (active ? std::max(25, opacity / 4) : 0));
+            _native_agent_dot_opacities[index] = opacity;
+        }
+    }
+}
+
+int CodexView::nativeAgentTargetAt(int x, int y) const
+{
+    if (_native_agent_touch_candidate >= 0 &&
+        _native_agent_touch_candidate < static_cast<int>(kNativeAgentCenters.size())) {
+        const auto& current = kNativeAgentCenters[static_cast<size_t>(_native_agent_touch_candidate)];
+        const int retained_half = kNativeAgentHitHalf + kNativeAgentSwitchHysteresis;
+        if (std::abs(x - current.x) <= retained_half &&
+            std::abs(y - current.y) <= retained_half) {
+            return _native_agent_touch_candidate;
+        }
+    }
+
+    int nearest = -1;
+    int nearest_distance = INT_MAX;
+    for (size_t index = 0; index < kNativeAgentCenters.size(); ++index) {
+        const auto& center = kNativeAgentCenters[index];
+        const int dx = x - center.x;
+        const int dy = y - center.y;
+        if (std::abs(dx) > kNativeAgentHitHalf || std::abs(dy) > kNativeAgentHitHalf) {
+            continue;
+        }
+        const int distance = dx * dx + dy * dy;
+        if (distance < nearest_distance) {
+            nearest = static_cast<int>(index);
+            nearest_distance = distance;
+        }
+    }
+    return nearest;
+}
+
+void CodexView::resetNativeAgentTouch()
+{
+    const bool was_tracking = _native_agent_touch_tracking;
+    _native_agent_touch_tracking = false;
+    _native_agent_touch_candidate = -1;
+    _native_agent_touch_started_at = 0;
+    _native_agent_touch_last_visual_tick = 0;
+    _native_agent_touch_committed = false;
+    if (was_tracking) {
+        updateNativeAgentRail(true);
+    }
+}
+
+void CodexView::nativeAgentTouchEvent(lv_event_t* event)
+{
+    auto* view = static_cast<CodexView*>(lv_event_get_user_data(event));
+    if (!view || view->_theme_mode != ThemeMode::OpenWatcherV2) {
+        return;
+    }
+
+    const lv_event_code_t code = lv_event_get_code(event);
+    if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        view->resetNativeAgentTouch();
+        return;
+    }
+    if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING) {
+        return;
+    }
+    if (view->_voice_mode != VoiceMode::Idle || view->_task_list_active ||
+        view->_action_wheel_active || view->_reasoning_touch_tracking) {
+        return;
+    }
+
+    lv_indev_t* indev = GetHAL().lvTouchpad;
+    if (!indev) {
+        return;
+    }
+    lv_point_t point = {0, 0};
+    lv_indev_get_point(indev, &point);
+    const uint32_t now = GetHAL().millis();
+    const int candidate = view->nativeAgentTargetAt(point.x, point.y);
+
+    if (code == LV_EVENT_PRESSED) {
+        if (candidate < 0) {
+            return;
+        }
+        view->_native_agent_touch_tracking = true;
+        view->_native_agent_touch_candidate = candidate;
+        view->_native_agent_touch_started_at = now;
+        view->_native_agent_touch_last_visual_tick = now;
+        view->_native_agent_touch_committed = false;
+        GetHAL().vibrate(14, 35);
+        view->updateNativeAgentRail(true);
+        return;
+    }
+
+    if (!view->_native_agent_touch_tracking) {
+        return;
+    }
+    if (candidate != view->_native_agent_touch_candidate) {
+        view->_native_agent_touch_candidate = candidate;
+        view->_native_agent_touch_started_at = now;
+        view->_native_agent_touch_last_visual_tick = now;
+        view->_native_agent_touch_committed = false;
+        if (candidate >= 0) {
+            GetHAL().vibrate(12, 30);
+        }
+        view->updateNativeAgentRail(true);
+        return;
+    }
+    if (candidate < 0) {
+        return;
+    }
+
+    if (!view->_native_agent_touch_committed &&
+        now - view->_native_agent_touch_started_at >= kNativeAgentHoldMs) {
+        view->_native_agent_touch_committed = true;
+        const size_t index = static_cast<size_t>(candidate);
+        // A slot's light state can be temporarily unassigned after reconnect
+        // even though the native Codex Micro HID channel is usable. Queue the
+        // physical Agent action unconditionally; the transport layer performs
+        // the authoritative ready/online check and reports failure to the UI.
+        if (index < view->_native_agents.size()) {
+            view->_native_agent_slot_request = candidate;
+            GetHAL().vibrate(35, 75);
+        } else {
+            view->setMessage("AGENT INVALID", 1000);
+            GetHAL().vibrate(20, 45);
+        }
+        view->updateNativeAgentRail(true);
+        return;
+    }
+
+    if (!view->_native_agent_touch_committed &&
+        now - view->_native_agent_touch_last_visual_tick >= kNativeAgentPreviewFrameMs) {
+        view->_native_agent_touch_last_visual_tick = now;
+        view->updateNativeAgentRail(true);
+    }
+}
+
+void CodexView::drawOpenWatcherV2Event(lv_event_t* event)
+{
+    auto* view = static_cast<CodexView*>(lv_event_get_user_data(event));
+    if (view == nullptr) {
+        return;
+    }
+    lv_event_code_t code = lv_event_get_code(event);
+    if (code != LV_EVENT_DRAW_MAIN_BEGIN) {
+        return;
+    }
+
+    lv_obj_t* obj = lv_event_get_target_obj(event);
+    lv_layer_t* layer = lv_event_get_layer(event);
+    lv_area_t coords;
+    lv_obj_get_coords(obj, &coords);
+    view->drawOpenWatcherV2(layer, coords);
+}
+
+void CodexView::drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords)
+{
+    const int width = coords.x2 - coords.x1 + 1;
+    const int height = coords.y2 - coords.y1 + 1;
+    const lv_point_t center = {
+        static_cast<lv_coord_t>(coords.x1 + width / 2),
+        static_cast<lv_coord_t>(coords.y1 + height / 2),
+    };
+
+    lv_draw_arc_dsc_t arc;
+    lv_draw_arc_dsc_init(&arc);
+    arc.center = center;
+    arc.rounded = 1;
+
+    const float week = remainingRatio(_state.weekly);
+
+    arc.radius = 223;
+    arc.width = 7;
+    arc.color = lv_color_hex(kOwTrack);
+    arc.opa = 170;
+    arc.start_angle = 180;
+    arc.end_angle = 360;
+    lv_draw_arc(layer, &arc);
+
+    constexpr int kTopSegments = 36;
+    for (int i = 0; i < kTopSegments; ++i) {
+        const float start = static_cast<float>(i) / static_cast<float>(kTopSegments);
+        const float end = static_cast<float>(i + 1) / static_cast<float>(kTopSegments);
+        if (start >= week) {
+            break;
+        }
+        const float active_end = std::min(end, week);
+        const int start_deg = 180 + static_cast<int>(std::lround(180.0f * start));
+        const int end_deg = 180 + static_cast<int>(std::lround(180.0f * active_end)) - 1;
+        if (end_deg <= start_deg) {
+            continue;
+        }
+        arc.color = lv_color_hex(quota_semantic_color((start + active_end) * 0.5f));
+        arc.opa = 235;
+        arc.start_angle = start_deg;
+        arc.end_angle = end_deg;
+        lv_draw_arc(layer, &arc);
+    }
+
+    lv_draw_rect_dsc_t rect;
+    lv_draw_rect_dsc_init(&rect);
+
+    auto draw_line = [&](int x1, int y1, int x2, int y2, uint32_t color, int line_width, lv_opa_t opa) {
+        lv_draw_line_dsc_t line;
+        lv_draw_line_dsc_init(&line);
+        line.p1 = {static_cast<lv_value_precise_t>(coords.x1 + x1), static_cast<lv_value_precise_t>(coords.y1 + y1)};
+        line.p2 = {static_cast<lv_value_precise_t>(coords.x1 + x2), static_cast<lv_value_precise_t>(coords.y1 + y2)};
+        line.color = lv_color_hex(color);
+        line.width = line_width;
+        line.opa = opa;
+        line.round_start = 1;
+        line.round_end = 1;
+        lv_draw_line(layer, &line);
+    };
+
+    draw_line(50, 181, 122, 181, kOwToday, 1, 230);
+    draw_line(122, 181, 147, 205, kOwToday, 1, 230);
+    draw_line(147, 205, 168, 205, kOwToday, 1, 230);
+
+    lv_area_t today_dot = {
+        static_cast<lv_coord_t>(coords.x1 + 165),
+        static_cast<lv_coord_t>(coords.y1 + 202),
+        static_cast<lv_coord_t>(coords.x1 + 171),
+        static_cast<lv_coord_t>(coords.y1 + 208),
+    };
+    rect.radius = LV_RADIUS_CIRCLE;
+    rect.bg_color = lv_color_hex(kOwToday);
+    rect.bg_opa = 255;
+    rect.border_width = 0;
+    lv_draw_rect(layer, &rect, &today_dot);
+
+    auto draw_divider = [&](int y, bool agent_rail) {
+        if (agent_rail) {
+            draw_line(44, y, 148, y, 0x314052, 1, 210);
+            draw_line(318, y, 422, y, 0x314052, 1, 210);
+            return;
+        }
+        draw_line(44, y, 204, y, 0x314052, 1, 210);
+        draw_line(262, y, 422, y, 0x314052, 1, 210);
+        draw_line(218, y, 227, y, 0x596CFF, 2, 245);
+        draw_line(232, y, 241, y, 0x596CFF, 2, 245);
+        draw_line(246, y, 255, y, 0x596CFF, 2, 245);
+    };
+    draw_divider(222, false);
+    draw_divider(340, false);
+
+    constexpr int kCells = 24;
+    constexpr int kCellSize = 24;
+    constexpr int kCellGap = 6;
+    const int cell_x = coords.x1 + 56;
+    const int cell_y = coords.y1 + 263;
+
+    for (int i = 0; i < kCells; ++i) {
+        const float activity = _state.activityBuckets[i];
+        const int col = i / 2;
+        const int row = i % 2;
+        const int x = cell_x + col * (kCellSize + kCellGap);
+        const int y = cell_y + row * (kCellSize + kCellGap);
+
+        lv_area_t area = {
+            static_cast<lv_coord_t>(x),
+            static_cast<lv_coord_t>(y),
+            static_cast<lv_coord_t>(x + kCellSize - 1),
+            static_cast<lv_coord_t>(y + kCellSize - 1),
+        };
+        rect.radius = 4;
+        rect.bg_color = lv_color_hex(activity_heat_color(activity));
+        rect.bg_opa = 255;
+        rect.border_width = 1;
+        rect.border_color = lv_color_hex(0x145484);
+        rect.border_opa = 150;
+        lv_draw_rect(layer, &rect, &area);
+    }
+
+}
+
+void CodexView::initPet()
+{
+    _pet_hit_area = std::make_unique<Container>(_panel->get());
+    _pet_hit_area->setSize(220, 210);
+    _pet_hit_area->align(LV_ALIGN_TOP_MID, 0, 118);
+    _pet_hit_area->setBgOpa(LV_OPA_TRANSP);
+    _pet_hit_area->setBorderWidth(0);
+    _pet_hit_area->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _pet_hit_area->onClick().connect([this]() {
+        const uint32_t now = GetHAL().millis();
+        if (static_cast<int32_t>(_suppress_pet_click_until_ms - now) > 0) {
+            return;
+        }
+        _pet_pressed = true;
+        setMessageImage(pick_touch_asset(++_message_phrase_counter + now), 2200);
+        GetHAL().vibrate(30, 80);
+    });
+
+    _pet_image = std::make_unique<Image>(_pet_hit_area->get());
+    _pet_image->setSrc(&codex_pet_idle0);
+    _pet_image->align(LV_ALIGN_CENTER, 0, 2);
+    _pet_image->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _pet_current_src = &codex_pet_idle0;
+    const uint32_t now = GetHAL().millis();
+    _next_blink_tick = now + 4200;
+    _next_idle_action_tick = now + 2600;
+}
+
+void CodexView::updatePet()
+{
+    const uint32_t now = GetHAL().millis();
+    const float t      = static_cast<float>(now % 3600) / 3600.0f;
+    const float voicePulse = _voice_mode == VoiceMode::Idle ? 0.0f
+        : (0.5f + 0.5f * std::sin(static_cast<float>(now % 760) / 760.0f * 6.283185f));
+    const float effectPulse = now < _pet_effect_until_tick
+        ? (0.5f + 0.5f * std::sin(static_cast<float>(now % 260) / 260.0f * 6.283185f))
+        : 0.0f;
+    const bool touchAnimating = _pet_anim == PetAnim::Touch;
+    const int touchLift = touchAnimating
+        ? static_cast<int>((1.0f - std::min(1.0f, static_cast<float>(now - _pet_anim_start_tick) / 520.0f)) * -7.0f)
+        : 0;
+    const int yOffset  = static_cast<int>(std::sin(t * 6.283185f) * 4.0f - voicePulse * 3.0f - effectPulse * 5.0f) + touchLift;
+    const int tiltX     = static_cast<int>(_tilt_x * codex_config::kTiltMaxOffset);
+    const int tiltY     = static_cast<int>(_tilt_y * codex_config::kTiltMaxOffset);
+    const int shakeX    = static_cast<int>(std::sin(static_cast<float>(now % 220) / 220.0f * 6.283185f) * _shake_energy * 11.0f);
+
+    if (_pet_hit_area) {
+        const int baseY = _theme_mode == ThemeMode::OpenWatcherV2 ? 124 : 118;
+        _pet_hit_area->align(LV_ALIGN_TOP_MID, tiltX + shakeX, baseY + yOffset + tiltY);
+    }
+    if (_pet_face) {
+        _pet_face->align(LV_ALIGN_CENTER, -4 + static_cast<int>(_tilt_x * 4.0f),
+                         -1 + static_cast<int>(_tilt_y * 3.0f));
+    }
+
+    if (_pet_pressed) {
+        _pet_pressed = false;
+        _pet_anim = PetAnim::Touch;
+        _pet_anim_start_tick = now;
+        _pet_effect_until_tick = now + kPetTouchEffectMs;
+        _shake_energy = std::max(_shake_energy, 0.25f);
+        if (_pet_image) {
+            _pet_image->setOpa(220);
+        }
+        if (_pet_screen) {
+            _pet_screen->setBgColor(lv_color_hex(0x08243A));
+        }
+        _last_idle_tick = now;
+        _next_idle_action_tick = now + 3600;
+        return;
+    }
+
+    if (_pet_anim == PetAnim::Idle && now >= _next_blink_tick) {
+        _pet_anim = PetAnim::Blink;
+        _pet_anim_start_tick = now;
+        _next_blink_tick = now + 4300 + ((now / 97) % 3600);
+    }
+    if (_pet_anim == PetAnim::Idle &&
+        _voice_mode == VoiceMode::Idle &&
+        !_state.processing &&
+        now >= _next_idle_action_tick) {
+        _idle_action_kind = static_cast<uint8_t>((now / 977U) % 2U);
+        _pet_anim = _idle_action_kind == 0 ? PetAnim::LookAround : PetAnim::Stretch;
+        _pet_anim_start_tick = now;
+        _next_idle_action_tick = now + 5200 + ((now / 113U) % 4300U);
+    }
+
+    const uint32_t anim_elapsed = now - _pet_anim_start_tick;
+    const void* frame = &codex_pet_idle0;
+    if ((_state.processing || _voice_mode == VoiceMode::Processing) && _pet_anim != PetAnim::Touch) {
+        const uint32_t phase = (now / 135) % 8;
+        frame = phase == 0 ? static_cast<const void*>(&codex_pet_processing0)
+                            : (phase == 1 ? static_cast<const void*>(&codex_pet_processing1)
+                                          : (phase == 2 ? static_cast<const void*>(&codex_pet_processing2)
+                                                        : (phase == 3 ? static_cast<const void*>(&codex_pet_processing3)
+                                                                      : (phase == 4 ? static_cast<const void*>(&codex_pet_processing2)
+                                                                                    : static_cast<const void*>(&codex_pet_processing1)))));
+    } else switch (_pet_anim) {
+    case PetAnim::Touch:
+        if (anim_elapsed < 90) {
+            frame = &codex_pet_touch0;
+        } else if (anim_elapsed < 230) {
+            frame = &codex_pet_touch1;
+        } else if (anim_elapsed < 430) {
+            frame = &codex_pet_touch2;
+        } else if (anim_elapsed < 720) {
+            frame = &codex_pet_touch3;
+        } else {
+            frame = &codex_pet_idle1;
+        }
+        if (anim_elapsed > 920) {
+            _pet_anim = PetAnim::Idle;
+            _pet_anim_start_tick = now;
+            _next_blink_tick = now + 2600;
+            _next_idle_action_tick = now + 4200;
+        }
+        break;
+    case PetAnim::LookAround:
+        if (anim_elapsed < 130) {
+            frame = &codex_pet_idle1;
+        } else if (anim_elapsed < 310) {
+            frame = &codex_pet_idle2;
+        } else if (anim_elapsed < 500) {
+            frame = &codex_pet_idle1;
+        } else if (anim_elapsed < 700) {
+            frame = &codex_pet_idle3;
+        } else {
+            frame = &codex_pet_idle0;
+        }
+        if (anim_elapsed > 900) {
+            _pet_anim = PetAnim::Idle;
+            _pet_anim_start_tick = now;
+        }
+        break;
+    case PetAnim::Stretch:
+        if (anim_elapsed < 120) {
+            frame = &codex_pet_idle0;
+        } else if (anim_elapsed < 300) {
+            frame = &codex_pet_idle4;
+        } else if (anim_elapsed < 520) {
+            frame = &codex_pet_idle5;
+        } else if (anim_elapsed < 760) {
+            frame = &codex_pet_idle4;
+        } else {
+            frame = &codex_pet_idle1;
+        }
+        if (anim_elapsed > 1020) {
+            _pet_anim = PetAnim::Idle;
+            _pet_anim_start_tick = now;
+            _next_blink_tick = now + 2100;
+        }
+        break;
+    case PetAnim::Blink:
+        if (anim_elapsed < 110) {
+            frame = &codex_pet_blink0;
+        } else if (anim_elapsed < 230) {
+            frame = &codex_pet_blink1;
+        } else if (anim_elapsed < 340) {
+            frame = &codex_pet_blink0;
+        } else {
+            _pet_anim = PetAnim::Idle;
+            _pet_anim_start_tick = now;
+            _next_blink_tick = now + 4200 + (now % 3200);
+            frame = &codex_pet_idle0;
+        }
+        break;
+    case PetAnim::Idle:
+    default:
+        switch ((now / 820) % 24) {
+        case 0:
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+            frame = &codex_pet_idle0;
+            break;
+        case 6:
+        case 7:
+            frame = &codex_pet_idle1;
+            break;
+        case 9:
+            frame = &codex_pet_idle2;
+            break;
+        case 10:
+            frame = &codex_pet_idle0;
+            break;
+        case 12:
+            frame = &codex_pet_idle3;
+            break;
+        case 13:
+            frame = &codex_pet_idle0;
+            break;
+        case 15:
+        case 16:
+            frame = &codex_pet_idle5;
+            break;
+        case 19:
+            frame = &codex_pet_idle4;
+            break;
+        default:
+            frame = &codex_pet_idle1;
+            break;
+        }
+        break;
+    }
+    setPetFrame(frame);
+    _shake_energy *= 0.90f;
+    if (_shake_energy < 0.03f) {
+        _shake_energy = 0.0f;
+    }
+
+    if (now - _last_idle_tick > 500) {
+        _last_idle_tick = now;
+        if (_pet_image) {
+            const int opa = now < _pet_effect_until_tick ? 230 + static_cast<int>(effectPulse * 25.0f) : 255;
+            _pet_image->setOpa(static_cast<lv_opa_t>(std::clamp(opa, 0, 255)));
+        }
+        if (_pet_screen) {
+            _pet_screen->setBgColor(lv_color_hex(0x020A11));
+        }
+        if (_pet_face) {
+            if (_pet_anim == PetAnim::Touch) {
+                _pet_face->setText(">_<");
+            } else if (_pet_anim == PetAnim::LookAround) {
+                _pet_face->setText("> ");
+            } else if (_pet_anim == PetAnim::Stretch) {
+                _pet_face->setText("^_");
+            } else if (_voice_mode == VoiceMode::Interrupted) {
+                _pet_face->setText("!!");
+            } else if (_voice_mode != VoiceMode::Idle) {
+                _pet_face->setText(">_");
+            } else {
+                _pet_face->setText(((now / 5000) % 2) == 0 ? ">_" : "> ");
+            }
+        }
+    }
+}
+
+void CodexView::initVoiceWaveform()
+{
+    _voice_waveform = std::make_unique<Container>(_panel->get());
+    _voice_waveform->setSize(188, 42);
+    _voice_waveform->align(LV_ALIGN_TOP_MID, 0, _theme_mode == ThemeMode::OpenWatcherV2 ? 354 : 319);
+    _voice_waveform->setBgOpa(LV_OPA_TRANSP);
+    _voice_waveform->setBorderWidth(0);
+    _voice_waveform->setPaddingAll(0);
+    _voice_waveform->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _voice_waveform->setHidden(true);
+
+    constexpr int kBarCount = 9;
+    constexpr int kBarWidth = 8;
+    constexpr int kGap = 12;
+    constexpr int kStartX = 42;
+    for (int i = 0; i < kBarCount; ++i) {
+        auto bar = std::make_unique<Container>(_voice_waveform->get());
+        bar->setSize(kBarWidth, 10);
+        bar->setRadius(5);
+        bar->setBorderWidth(0);
+        bar->setBgColor(i % 2 == 0 ? lv_color_hex(kOwBlue) : lv_color_hex(kColorWeek));
+        bar->setBgOpa(220);
+        bar->setShadowWidth(0);
+        bar->align(LV_ALIGN_TOP_LEFT, kStartX + i * kGap, 16);
+        bar->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        _voice_bars[i] = std::move(bar);
+    }
+}
+
+void CodexView::updateVoiceWaveform()
+{
+    if ((_voice_mode != VoiceMode::Recording && _voice_mode != VoiceMode::Processing) ||
+        !_voice_waveform || lv_obj_has_flag(_voice_waveform->get(), LV_OBJ_FLAG_HIDDEN)) {
+        return;
+    }
+
+    constexpr int kMaxHeight = 36;
+    constexpr int kMinHeight = 8;
+    constexpr int kCenterY = 21;
+    const uint32_t now = GetHAL().millis();
+    for (size_t i = 0; i < _voice_bars.size(); ++i) {
+        if (!_voice_bars[i]) {
+            continue;
+        }
+        float wave = 0.0f;
+        if (_voice_mode == VoiceMode::Processing) {
+            const float cursor = static_cast<float>((now / 90) % 18) / 2.0f;
+            const float distance = std::fabs(cursor - static_cast<float>(i));
+            wave = std::max(0.12f, 1.0f - distance * 0.32f);
+        } else {
+            const float phase = static_cast<float>((now / 65 + i * 3) % 18) / 18.0f;
+            wave = 0.5f + 0.5f * std::sin((phase * 6.283185f) + static_cast<float>(i) * 0.78f);
+        }
+        const int height = kMinHeight + static_cast<int>(std::lround((kMaxHeight - kMinHeight) * wave));
+        const int opacity = 150 + static_cast<int>(wave * 90.0f);
+        if (_voice_bar_heights[i] == height && _voice_bar_opacities[i] == opacity) {
+            continue;
+        }
+        _voice_bar_heights[i] = height;
+        _voice_bar_opacities[i] = opacity;
+        _voice_bars[i]->setSize(8, height);
+        _voice_bars[i]->align(LV_ALIGN_TOP_LEFT, 42 + static_cast<int>(i) * 12, kCenterY - height / 2);
+        _voice_bars[i]->setBgOpa(opacity);
+    }
+}
+
+void CodexView::setPetFrame(const void* src)
+{
+    if (!_pet_image || src == nullptr || src == _pet_current_src) {
+        return;
+    }
+    _pet_image->setSrc(src);
+    _pet_current_src = src;
+}
+
+void CodexView::updateMotionInput()
+{
+    const uint32_t now = GetHAL().millis();
+    if (now - _last_imu_update_tick < 50) {
+        return;
+    }
+    _last_imu_update_tick = now;
+
+    GetHAL().updateImuData();
+    const auto& imu = GetHAL().getImuData();
+
+    const float targetTiltX = std::clamp(imu.accelX, -1.0f, 1.0f);
+    const float targetTiltY = std::clamp(imu.accelY, -1.0f, 1.0f);
+    _tilt_x += (targetTiltX - _tilt_x) * codex_config::kTiltFilterAlpha;
+    _tilt_y += (targetTiltY - _tilt_y) * codex_config::kTiltFilterAlpha;
+
+    const float gyroMotion = std::sqrt(imu.gyroX * imu.gyroX + imu.gyroY * imu.gyroY + imu.gyroZ * imu.gyroZ);
+    if (gyroMotion > codex_config::kShakeMotionFloor) {
+        const float normalized = std::clamp((gyroMotion - codex_config::kShakeMotionFloor) / (codex_config::kShakeThreshold * 1.4f), 0.0f, 1.0f);
+        _shake_energy = std::max(_shake_energy, normalized);
+    }
+    if (gyroMotion > codex_config::kShakeThreshold) {
+        _shake_trigger_count = std::min<uint8_t>(_shake_trigger_count + 1, 3);
+    } else if (gyroMotion < codex_config::kShakeThreshold * 0.65f) {
+        _shake_trigger_count = 0;
+    }
+
+    if (_shake_trigger_count >= 2 && now - _last_shake_tick > codex_config::kShakeCooldownMs) {
+        _last_shake_tick = now;
+        _shake_trigger_count = 0;
+        _clear_input_requested = true;
+        _pet_effect_until_tick = now + 420;
+        _shake_energy = 1.0f;
+        setMessageImage(&codex_pet_msg_touch_1, 1300);
+        GetHAL().vibrate(55, 140);
+    }
+}
+
+void CodexView::setMessage(const char* message, uint32_t ttlMs)
+{
+    _message_image_active      = false;
+    _state.message              = message;
+    _state.messageExpiresAtMs   = GetHAL().millis() + ttlMs;
+    const bool voice_visible = _voice_mode != VoiceMode::Idle;
+    if (_message_image) {
+        _message_image->setHidden(true);
+    }
+    if (_message_label) {
+        _message_label->setHidden(voice_visible);
+        _message_label->setText(_state.message.c_str());
+    }
+}
+
+void CodexView::setMessageImage(const void* src, uint32_t ttlMs)
+{
+    if (!src || !_message_image) {
+        return;
+    }
+
+    if (_theme_mode != ThemeMode::OfficialV1) {
+        _message_image_active = false;
+        _message_image->setHidden(true);
+        return;
+    }
+
+    _message_image_active = true;
+    _state.messageExpiresAtMs = ttlMs == 0 ? 0 : GetHAL().millis() + ttlMs;
+    _message_image->setSrc(src);
+    _message_image->setHidden(_voice_mode != VoiceMode::Idle);
+    if (_message_label) {
+        _message_label->setHidden(true);
+    }
+}
+
+void CodexView::setMessageText(const std::string& message)
+{
+    if (_theme_mode != ThemeMode::OfficialV1) {
+        _message_image_active = false;
+        if (_message_image) {
+            _message_image->setHidden(true);
+        }
+        if (message.empty() || message == "Ready" ||
+            (_theme_mode == ThemeMode::CodexMicroDashboard && message == "Waiting...")) {
+            _state.message.clear();
+            _state.messageExpiresAtMs = 0;
+            if (_message_label) {
+                _message_label->setText("");
+                _message_label->setHidden(true);
+            }
+            return;
+        }
+
+        _state.message = message;
+        _state.messageExpiresAtMs = GetHAL().millis() + 2200;
+        if (_message_label) {
+            _message_label->setText(_state.message.c_str());
+            _message_label->setHidden(_voice_mode != VoiceMode::Idle);
+        }
+        updateCodexMicroDashboardLabels();
+        return;
+    }
+
+    if (message.empty() || message == "Ready") {
+        setIdleMessageImage(++_message_phrase_counter + GetHAL().millis());
+        return;
+    }
+
+    _message_image_active = false;
+    if (_message_image) {
+        _message_image->setHidden(true);
+    }
+    _state.message = message;
+    const bool voice_visible = _voice_mode != VoiceMode::Idle;
+    _state.messageExpiresAtMs = 0;
+    if (_message_label) {
+        _message_label->setHidden(voice_visible);
+        _message_label->setText(_state.message.c_str());
+    }
+}
+
+void CodexView::setIdleMessageImage(uint32_t salt)
+{
+    _state.message = pick_idle_phrase(salt);
+    setMessageImage(pick_idle_asset(salt), 0);
+}
+
+void CodexView::updateConnectionDots()
+{
+    if (_ble_dot) {
+        _ble_dot->setOpa(_state.bleConnected ? 255 : 90);
+    }
+    if (_wifi_dot) {
+        _wifi_dot->setOpa(_state.wifiConnected ? 255 : 90);
+    }
+}
+
+float CodexView::remainingRatio(const QuotaSlot& slot) const
+{
+    if (slot.limit <= 0.0f) {
+        return 0.0f;
+    }
+    return clamp01((slot.limit - slot.used) / slot.limit);
+}

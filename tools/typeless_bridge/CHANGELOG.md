@@ -1,0 +1,356 @@
+# StopWatch BLE Bridge Changelog
+
+Mac Bridge 使用独立语义化版本。固件与 Bridge 的兼容版本关系见仓库根目录 [README](../../README.md#版本历史)。
+
+## [1.4.1] - 2026-09-03
+
+### Changed
+
+- Bridge 将音频通知、按需录音已武装、虚拟输出健康与路由校验合并为一个“麦克风已就绪”信号；Stats 通知继续用于诊断，但不会阻塞其他条件均正常的音频。
+- 固件收到 A/B 的开始请求后，若音频通道尚未就绪，会保留一次请求并显示 `MIC LINKING`，就绪后只提交一次 Typeless 按键。
+
+### Fixed
+
+- 修复设备刚开机或 BLE 重连时，HID 已可用但自定义音频通知尚未完成，导致 Typeless 已启动而虚拟麦克风无声的竞态。
+- 3 秒内仍未就绪时取消本次录音并进入可重试的中断提示，不再把坏会话当成正常录音。
+- 新固件临时搭配旧 Bridge 时自动退回旧行为，避免因旧版本不包含就绪字段而锁死 A 键。
+
+### Validation
+
+- Bridge 完整 Swift 构建通过；麦克风就绪判定、固件延迟启动、云同步与虚拟音频路由回归测试通过。
+- 固件 v0.10.7 完成 ESP-IDF v5.5.4 全量构建、USB 应用刷写和哈希校验；Bridge v1.4.1 已在 Mac mini 与 iMac 使用各自稳定签名安装验证。
+
+## [1.4.0] - 2026-09-01
+
+### Added
+
+- 可选自托管云同步，让同一 Codex 账号在多台 Mac 上共用剩余额度、Today 和滚动四小时 / 24 格热力图。
+- SQLite 持久化、稳定事件 ID 去重、录音时段合并与 checkpoint 更新；离线额度只在得到有效确认后离开待同步队列。
+- 专用读写凭据和可选只读凭据；其他显示设备可以读取同一份统计，不需要持有 OpenAI 登录凭据。
+- [跨设备同步/API 文档](../../docs/stopwatch-cloud-sync.md)、独立服务端示例、私有配置生成器和只读状态检查工具。
+
+### Changed
+
+- 日边界固定为北京时间 08:00；Today 是周额度消耗的百分点，不是新的每日额度池。
+- 云同步开启后，即使手表换到其他 Mac，也继续采集；云交换每 60 秒，官方额度默认每 300 秒采集，跨日增加一次。
+- BLE 面板保持原刷新周期，录音中延后发送；固件、驱动、音频格式、按键、触摸与配对不变。
+- 首次旧记录迁移标记 `Today estimate`；缺少可靠基线显示不完整，不伪造 Today 0。
+
+### Fixed
+
+- 换电脑后 Today 重新归零、热力图只显示本机记录。
+- 缺失有效周额度字段时误用 0%；重复上传、晚到记录或旧响应导致重复统计或覆盖新缓存。
+- 多台 Mac 的旧起点仅作为候选，不把它们误算成同一天的多次消耗。
+
+### Validation and limitations
+
+- 两台 Mac 已核验同一份云端统计；Swift 构建、云客户端回归、音频路由安全检查通过。
+- 服务端统计回归和独立 HTTP 鉴权、只读权限、重试、负载上限检查通过。
+- 真实跨 08:00、睡眠唤醒和长时间离线后的整日实测仍待观察；热力图只覆盖本系统实际记录的设备活动。
+- 这是源码与文档更新，不包含预配置服务器、个人安装包或新的固件二进制。
+
+## [1.3.6] - 2026-08-31
+
+### Fixed
+
+- 修复麦克风音频意外从 Mac 扬声器播放的问题：使用明确绑定虚拟设备的 AUHAL 输出，替换会跟随默认输出的音频引擎出口。
+- 输出仅允许 M5 虚拟麦克风 UID 或原有 BlackHole 虚拟设备 UID，拒绝物理扬声器和仅名称相似的设备。
+- 启动、恢复、录音前和健康检查核验真实输出；最终输出回调前后校验设备，查询失败或路由改变时静音并锁定故障。
+- 设备消失或采样率改变时静音，尝试重建输出并清空缓冲。录音中异常沿用“停止本次听写、按 A 重录”，不自动拼接或补播。
+- 阻止输出未就绪时启动音频流，并对已经排队的开始命令再次校验。
+
+### Compatibility
+
+- 保持 16 kHz IMA-ADPCM、BLE 协议、A/B 按键、Agent 触摸、固件与驱动不变。
+- 保留标准采样率转换；不改变系统默认扬声器或虚拟设备采样率。
+- 增加路由日志、静音保护单元测试、虚拟设备生命周期测试和合成音频回环测试。
+
+### Validation and known limitation
+
+- Mac mini 的 16 kHz 源流转 48 kHz 虚拟输出、虚拟输入回环、重复重建及故障静音测试通过。
+- Swift 构建通过；Mac mini 和 iMac 的 v1.3.6 安装、签名与运行状态已核验，既有配置保留。
+- iMac 的虚拟输出限定、重复重建和拒绝扬声器测试通过；完整回环受测试程序的 macOS 麦克风授权限制，尚未验收。双机实机按 A 的 Typeless 录入及“不再外放”仍待完整验收，不能仅凭应用运行或驱动枚举判定成功。
+- 额外变采样率测试在实时切换到 16 kHz 后复现虚拟输入无声，即使重建测试进程仍存在；尚未解决，不算作已通过项目。保留默认 48 kHz 虚拟设备设置；本次不修改驱动。BLE 源流仍是 16 kHz，与此设置不同。
+
+## [1.3.5] - 2026-08-25
+
+### Changed
+
+- 支持固件 stats v4，日志和健康快照可直接显示最后通知错误、连续失败数和 NimBLE 可用 mbuf 数。
+- 保持现有语音异常交互：明确断流时停止 Typeless 本次听写并提示重说，不尝试拼接已经缺失的中段。
+
+### Fixed
+
+- 修正固件开始新录音时丢包计数归零所导致的 Bridge 基线计算时序问题。
+- 录音持续断流后先重建 Audio 通知订阅；60 秒内再次发生同类故障时，升级为重建整条 BLE 连接，不再需要手动关闭、重开虚拟麦克风。
+
+### Verified
+
+- Swift 构建通过，安装版本确认为 v1.3.5。
+- 实机重连后 Audio 特征已订阅，Core Audio 虚拟输出健康，stats v4 诊断字段可读。
+
+## [1.3.4] - 2026-08-23
+
+### Changed
+
+- Bridge 只在扫描阶段允许重复 BLE 广播回调，让 macOS 原生 IOHID 设备稳定后能立即再次评估同一台 StopWatch。
+
+### Fixed
+
+- 修复第一个广播比原生 HID 准备更早到达时，Bridge 忽略这次发现后只能等待 5 秒健康检查才接入 Companion 和麦克风服务的问题。
+- 配合固件 v0.10.5 的录音意图锁存，修复设备开机后快速按 A 时首次录音无音频的时序窗口。
+
+### Verified
+
+- Swift 构建、稳定本地签名、LaunchAgent 安装和自动重连通过，安装版本确认为 v1.3.4。
+- 实机验收确认 StopWatch 开机后麦克风可自动接入，无需手动关闭再开启 Bridge 麦克风。
+
+## [1.3.3] - 2026-08-22
+
+### Changed
+
+- A 键启动录音前先执行虚拟麦克风预检：恢复 BLE 音频通知订阅、必要时重建 Core Audio 输出，并明确请求设备开始音频流。
+- Typeless 未运行时，Bridge 在后台启动应用，等待快捷键注册完成后仅补发一次 A 键绑定。
+- 自动启动路径带有重入保护、6 秒超时和明确错误状态，正常已运行路径不增加等待。
+
+### Fixed
+
+- 修复 Typeless 退出或更新后没有运行时，StopWatch A 键在 Mac 上只产生系统提示音、无法开始语音输入的问题。
+- 修复录音前音频链路失效时，需要手动关闭再开启 Bridge 麦克风功能才能恢复的问题。
+
+### Verified
+
+- Swift 本地构建、稳定签名安装和 LaunchAgent 重载成功，安装版本确认为 v1.3.3。
+- BLE 重连后虚拟麦克风引擎和音频订阅健康，实机语音输入恢复正常。
+
+## [1.3.2] - 2026-08-22
+
+### Changed
+
+- macOS 原生 IOHID 设备出现后等待 0.7 秒，再由 CoreBluetooth 接入 Companion 和麦克风服务，避免原生 HID 与 Bridge 在连接交接瞬间竞争。
+- 认证尚未就绪时每 1.2 秒重试订阅，最多三次；达到上限后停止自动重试并显示需要重置配对，不再持续触发系统认证提示。
+- 扫描等待日志按 10 秒限频，避免长期断开时日志文件快速增长。
+
+### Fixed
+
+- 修复 Bridge 健康检查从系统已连接列表取回设备后，未确认原生 HID 状态便直接连接的问题。
+- 修复 event stream 或麦克风订阅返回 `Authentication is insufficient` 后没有恢复策略的问题。
+
+### Verified
+
+- Bridge 本地 Swift 构建、稳定签名安装和 LaunchAgent 重载成功。
+- 固件连续重启后 Bridge 均自动恢复，近期日志无认证失败，虚拟麦克风管线与 BLE 订阅状态正常。
+
+## [1.3.1] - 2026-08-21
+
+### Changed
+
+- 扫描到 `M5Codex-*` 后先通过 IOHID 确认 macOS 原生键盘链路已经连接，再接入 Companion 和音频服务，避免 CoreBluetooth 与系统 HOGP 配对同时抢占外设。
+- 每次新录音开始前检查虚拟输入路由；连续录音保持热启动，空闲超过 8 秒或输出不健康时才重建 Core Audio 输出。
+- BLE 断开时完整停止旧音频输出，重连后不再复用可能只输出静音的 AVAudioEngine。
+
+### Fixed
+
+- 修复首次配对需要反复尝试，或者已经连接后仍反复出现认证提示的问题。
+- 修复菜单仍显示麦克风已启用、系统也能看到 `M5 StopWatch Mic`，但重连或空闲后的首次录音没有声纹和音频的问题。
+
+### Compatibility
+
+- 不修改 16 kHz IMA-ADPCM 格式、虚拟麦克风驱动、按键、Agent、推理等级或中心四向协议。
+
+## [1.3.0] - 2026-08-20
+
+### Added
+
+- 读取本机 Codex 当前推理等级并随额度面板同步到 StopWatch。
+- 支持设备请求打开指定 Codex task，并为后续任务列表入口提供安全的 thread ID 校验和 `codex://threads/` 路由。
+- 支持推理等级回退队列：原生 Codex Micro Vendor HID 暂时不可用时，通过 Codex 命令面板逐级执行并在结束后重新同步确认状态。
+
+### Changed
+
+- BLE 重连时发现统一 HID 服务内的所有可通知 Report characteristic，辅助恢复 Codex Vendor Report 订阅。
+- 未读 task 同步扩展为可分片的 task 摘要协议；主界面仍优先显示四个原生 Agent 槽位。
+
+### Fixed
+
+- 修复 BLE 超时重连后标准键盘 Report 已恢复、Codex Vendor Report 仍未订阅的问题。
+- 修复连续调整推理等级时多条回退命令可能并发进入 Codex 命令面板的问题。
+
+### Compatibility
+
+- 不修改 16 kHz IMA-ADPCM 音频格式、虚拟麦克风驱动和原有 A/B 键配置。
+
+## [1.2.0] - 2026-08-18
+
+### Added
+
+- 读取本机 Codex 未读任务状态，过滤已归档的本地任务，并向固件发送轻量 `codex_unread` 数量消息。
+- 活动统计持久化到本机应用支持目录，Bridge 重启后可恢复最近四小时内已经完成的录音区间。
+
+### Changed
+
+- 最近四小时活动强度由离散事件权重改为“70% 实际录音时长 + 30% 启动频率”，避免短暂事件直接显示为重度使用。
+- 每个 10 分钟方格以四次录音启动作为频率参考；按键和摇晃只保留很小的交互权重。
+- 未读数量和活动面板继续复用串行 GATT 队列，只在数据变化时发送，不增加持续 BLE 流量。
+
+### Compatibility
+
+- 不修改 16 kHz IMA-ADPCM 音频格式、虚拟麦克风驱动、BLE HID 或现有按键配置。
+
+## [1.1.8] - 2026-08-17
+
+### Changed
+
+- 麦克风控制、状态同步和额度面板共用一个有优先级的 GATT 写入队列；录音开始/停止命令优先于普通状态和面板更新。
+- 额度面板分片改为等待上一条 `write-with-response` 完成后再发送，避免多个 ATT 请求重叠。
+- 完整安装流程会同步安装 60 秒进程守护，Bridge 异常退出后自动重新启动。
+
+### Fixed
+
+- 修复录音控制与额度面板并发写入时出现 ATT 响应超时、音频停顿和设备断线的问题。
+
+### Compatibility
+
+- 不修改 BLE characteristic、16 kHz IMA-ADPCM 音频格式、虚拟麦克风驱动和输入模式配置。
+
+## [1.1.7] - 2026-08-16
+
+### Changed
+
+- Codex 活动方格统计窗口从最近 2 小时扩展为最近 4 小时，继续使用 24 格，每格代表 10 分钟。
+- 面板数据中的 `activity_window` 和空闲标签同步更新为 `4h`。
+
+### Compatibility
+
+- 不修改 BLE 音频、按键、虚拟麦克风或额度同步协议。
+
+## [1.1.6] - 2026-08-16
+
+### Changed
+
+- 录音期间 BLE 明确断开或音频连续中断时，本次 Typeless 听写会被标记为失败，不再静默续接残缺语音。
+- 瞬断时保持 `M5 StopWatch Mic` 虚拟输入和系统默认输入不变，只输出静音并自动恢复 BLE 链路。
+- Bridge 会结束当前 Typeless 听写并保留已有文字；重连后只恢复待机，用户按 A 或原 Typeless 快捷键即可开始一段新录音。
+- 菜单栏持续显示“录音中断”，直到用户开始重试；空闲状态下的 BLE 重连仍保持静默。
+
+### Fixed
+
+- 修复按需麦克风在录音中途重连后停在 `Ready`、导致后续讲话全部丢失但 Typeless 仍显示录音的问题。
+
+## [1.1.5] - 2026-08-16
+
+### Changed
+
+- 新固件连接后进入按需麦克风待机，空闲时虚拟输入保持可用并输出静音，不再持续消耗 BLE 音频带宽。
+- 监控用户原有的 Typeless 主快捷键，使用 Mac 键盘启动听写时也会立即请求设备开始音频流。
+- Typeless 进入 Processing 或 Idle 后请求设备停止音频；设备保留短尾段以避免切换瞬间截断。
+
+### Compatibility
+
+- 新 Bridge 连接旧固件时会自动回退到连续音频模式，不影响现有虚拟麦克风功能。
+
+## [1.1.4] - 2026-08-16
+
+### Changed
+
+- 录音、处理和空闲状态继续通过轻量状态 characteristic 实时同步。
+- 状态变化不再连带推送完整额度面板，减少设备端静态 UI 重绘；额度仍在连接成功和定时刷新时推送。
+
+## [1.1.3] - 2026-08-16
+
+### Fixed
+
+- Typeless 模式下 A 键按下恢复为切换录音，松开不再立即停止。
+- Processing 状态下再次按 A 会直接开始新录音，本地会话状态不再被 Typeless 的短暂 idle 检测覆盖。
+
+## [1.1.2] - 2026-08-16
+
+### Fixed
+
+- 修复 BLE 音频包仍在持续传输、系统仍显示 `M5 StopWatch Mic`，但 Core Audio 虚拟输出引擎停转后输入变成全静音的问题。
+- 健康检查现在分别监控 BLE 音频包、ADPCM 解码和 Core Audio 渲染回调；输出停转时只重建音频引擎，不重启整个 Bridge，也不重置原默认输入记录。
+- 音频通知流停止时会自动重新订阅并重新发送 Start；设备流序号归零不再被误计为大量丢包。
+
+### Verified
+
+- 故障现场直接采样从 `Peak/RMS = -inf` 恢复到 Peak `-22.66 dB`、RMS `-39.29 dB`。
+- 故障注入测试确认输出引擎从 `healthy=true` 到主动停止后的 `healthy=false`，再通过同一重建路径恢复为 `healthy=true`。
+- 恢复后设备端和 Bridge 端丢包计数均为 0。
+
+## [1.1.1] - 2026-08-16
+
+### Fixed
+
+- 修复 StopWatch 仍作为 BLE 键盘连接时，Bridge 的音频 GATT 断线后无法自动恢复的问题。
+- 启动、连接失败、断线和健康检查现在都会优先接管 macOS 已连接的 `M5Codex-*` 设备，再回退到 BLE 扫描。
+
+### Verified
+
+- 在 `M5Codex-RO` 保持 HID 连接、Bridge 音频连接已经断开的现场状态下，重新建立 GATT 服务并恢复 16 kHz 音频包接收。
+
+## [1.1.0] - 2026-08-16
+
+### Added
+
+- 新增菜单可选的 `M5 StopWatch Mic` 虚拟麦克风模式。
+- 新增 BLE 16 kHz、20 ms、4-bit IMA-ADPCM 实时音频接收和解码。
+- 新增独立 Core Audio HAL 输入驱动、产品 PKG 构建和对应 BlackHole GPLv3 源码归档。
+- 新增包序号缺口静音补齐、设备端发送/丢包统计和默认输入恢复。
+
+### Verified
+
+- Typeless 实际语音识别成功；3,118 个连续音频包的实机验收区间丢包为 0。
+
+## [1.0.3] - 2026-06-14
+
+### Fixed
+
+- 稳定 Accessibility 权限、设备事件处理和 Typeless 状态防抖。
+- 新增本地稳定代码签名身份，减少更新 App 后重复授权。
+- 简化 Bridge 输入链路：真实按键由固件 BLE HID 发送，App 只观察和同步状态。
+
+## [1.0.2] - 2026-06-13
+
+### Changed
+
+- 与设备端摇晃清除灵敏度和语音输入工作流文档同步发布。
+- 保持 Bridge 协议兼容，继续使用设备端 HID 输入路径。
+
+## [1.0.1] - 2026-06-13
+
+### Fixed
+
+- 修复 Typeless 录音/处理中状态同步和 fallback 按键绑定。
+- 稳定 Accessibility 探测、BLE 状态写入、按下/松开事件和处理完成防抖。
+- 将输入按键责任明确移回设备固件 BLE HID。
+
+## [1.0.0] - 2026-06-13
+
+### Added
+
+- 首次发布 StopWatch BLE Bridge 菜单栏 App。
+- 支持 `M5Codex-*` 连接、Codex 额度推送、输入模式和按键配置同步。
+- 支持 Typeless 状态观察、LaunchAgent 安装和 arm64 ZIP 发布包。
+
+[1.4.1]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.4.1
+[1.4.0]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.4.0
+[1.3.5]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.3.5
+[1.3.4]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.3.4
+[1.3.3]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.3.3
+[1.3.2]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.3.2
+[1.3.1]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.3.1
+[1.3.0]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.3.0
+[1.2.0]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.2.0
+[1.1.8]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.8
+[1.1.7]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.7
+[1.1.6]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.6
+[1.1.5]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.5
+[1.1.4]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.4
+[1.1.3]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.3
+[1.1.2]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.2
+[1.1.1]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.1
+[1.1.0]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.1.0
+[1.0.3]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.0.3
+[1.0.2]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.0.2
+[1.0.1]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.0.1
+[1.0.0]: https://github.com/liptoxli/M5stopwatch-vibecoding/releases/tag/v1.0.0

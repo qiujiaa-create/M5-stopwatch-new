@@ -1,0 +1,30 @@
+# ESP-IDF Partition Table — 双固件 A/B（与 firmware-xiaozhi/partitions/stopwatch_dual.csv 保持一致）
+#
+# 16MB flash 布局：
+#   factory   6.0MB  现有 StopWatch 固件（app 实测 5.55MB，余约 465KB）
+#   ota_0     3.0MB  小智固件        （app 实测 2.83MB，余约 178KB）
+#   storage   4.0MB  FAT + wear-levelling（badge 图、ACTIVE_SLOT 等）
+#   coredump  64KB
+#   尾部 2.81MB (0xd30000 ~ 0x1000000) 暂不分配，预留给小智以后的 assets / 唤醒词模型
+#
+# 为什么这样排：
+#   1) storage 的 offset(0x920000) 与 size(0x400000) **与原固件完全一致**。
+#      wear levelling 的所有状态都按 `start_addr + 相对偏移` 寻址（WL_Flash.cpp:84-86），
+#      只在分区 size 变化时才会校验失败并重格式化。这里 size 一字未改 =>
+#      烧入新分区表后 badge 图不丢，也**不需要搬移任何数据**。
+#   2) nvs 位置不变 => 78/esp-wifi-connect 的配网凭据（NVS namespace "wifi"）保留，
+#      两个固件共用同一份 WiFi 配置，只需配一次网。
+#   3) factory 由 9MB 缩到 6MB：它只是 app 槽、不存任何持久数据，缩小安全，
+#      省出来的 3MB 正好让 ota_0 从小智装不下的 2.81MB 涨到 3MB。
+#      原先把 ota_0 放在尾部只有 2.81MB，小智固件 2.83MB 会溢出约 13.5KB。
+#
+# 切换：写 otadata 进 ota_0；擦除 otadata 即回到 factory（ESP-IDF 官方行为）。
+#
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x4000,
+otadata,  data, ota,     0xd000,   0x2000,
+phy_init, data, phy,     0xf000,   0x1000,
+factory,  app,  factory, 0x20000,  0x600000,
+ota_0,    app,  ota_0,   0x620000, 0x300000,
+storage,  data, fat,     0x920000, 0x400000,
+coredump, data, coredump,0xd20000, 0x10000,
