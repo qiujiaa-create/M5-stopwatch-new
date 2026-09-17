@@ -3802,9 +3802,16 @@ private final class StopWatchBleBridge: NSObject, CBCentralManagerDelegate, CBPe
                       reason: reason)
     }
 
+    // Only BLE microphone traffic competes with panel chunks. An external Mac
+    // microphone must not let an uncertain Typeless state freeze quota sync.
+    private func quotaPanelShouldWaitForMicrophone() -> Bool {
+        SettingsStore.shared.settings.virtualMicrophoneEnabled &&
+            (lastState?.phase == "recording" || typelessSessionActive)
+    }
+
     private func flushPendingQuotaPanel() {
         guard let panel = pendingQuotaPanel, panelCharacteristic != nil,
-              lastState?.phase == "idle", !typelessSessionActive else { return }
+              !quotaPanelShouldWaitForMicrophone() else { return }
         pendingQuotaPanel = nil
         lastQuotaPanelSentAt = Date()
         sendPanelData(panel,
@@ -3826,7 +3833,7 @@ private final class StopWatchBleBridge: NSObject, CBCentralManagerDelegate, CBPe
 
         if !isFetchReason {
             guard let cached = lastQuotaPanel, bleConnected,
-                  lastState?.phase != "recording", !typelessSessionActive else { return }
+                  !quotaPanelShouldWaitForMicrophone() else { return }
             tryPushCachedPanel(cached, note: "Synced (cached)", reason: reason)
             return
         }
@@ -3855,9 +3862,9 @@ private final class StopWatchBleBridge: NSObject, CBCentralManagerDelegate, CBPe
                     self.quotaFetchInFlight = false
                     self.lastQuotaPanel = panel
                     self.lastQuotaFetchAt = Date()
-                    // Never add a panel burst during dictation.
+                    // Defer panel chunks while the watch is streaming audio.
                     guard self.panelCharacteristic != nil,
-                          self.lastState?.phase != "recording", !self.typelessSessionActive else {
+                          !self.quotaPanelShouldWaitForMicrophone() else {
                         self.pendingQuotaPanel = panel
                         BridgeStatusCenter.shared.quotaStatus = "Cloud synced"
                         // Log timer-cycle skips so a silently frozen watch is diagnosable
