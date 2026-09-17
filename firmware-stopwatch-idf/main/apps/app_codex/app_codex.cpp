@@ -39,7 +39,8 @@ view::CodexView::ThemeMode load_codex_theme_mode()
     if (theme == kThemeOpenWatcherV2) {
         return view::CodexView::ThemeMode::OpenWatcherV2;
     }
-    return view::CodexView::ThemeMode::OfficialV1;
+    // A removed or unknown persisted theme must still open Codex safely.
+    return view::CodexView::ThemeMode::CodexMicroDashboard;
 }
 
 }  // namespace

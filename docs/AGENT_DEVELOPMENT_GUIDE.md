@@ -1,8 +1,8 @@
 # Agent 与二次开发指南
 
-文档版本：0.3；最后更新：2026-09-17 09:58。
+文档版本：0.4；最后更新：2026-09-17 12:07。
 
-**现状提示：**本指南中的“已验证能力”包含历史验收记录，不代表 2026-09-16 导入的新工作目录产物已通过同样验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准；2026-09-17 用户已在当前安装组合上确认 OpenWatcher V2 顶部推理滑动与中心四向 Radial 的 Codex 端实际效果。
+**现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录固件已刷入 factory，但新固件的页面与输入操作仍待用户验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 现只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。
 
 本文面向使用 Codex、Claude Code、Cursor 或其他代码 Agent 修改本项目的开发者，也适合第一次接触 ESP-IDF、LVGL、BLE HID 和 macOS Core Audio 的贡献者。
 
@@ -107,7 +107,7 @@ Mac 本机 Codex 状态
 | 摇晃 | Clear Input | 默认通过已配置的清除动作 |
 | A+B | 退出 Codex App | 回到设备 Launcher |
 
-Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。修改输入逻辑时必须同时验证 Classic / Pet 和 OpenWatcher V2，因为两套 UI 共用同一交互状态机。
+Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。修改输入逻辑时必须同时验证 Codex Micro 和 OpenWatcher V2，因为两套 UI 共用同一交互状态机。
 
 ### 4.2 四个 Agent 点
 

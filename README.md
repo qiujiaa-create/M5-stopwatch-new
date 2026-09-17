@@ -1,5 +1,7 @@
 # M5 StopWatch for Vibe Coding
 
+文档版本：0.1；最后更新：2026-09-17 12:07。
+
 <p align="center">
   <strong>把 M5Stack StopWatch 变成桌面上的 Codex 状态屏、语音输入控制器和实时蓝牙麦克风。</strong>
 </p>
@@ -38,7 +40,7 @@ M5 StopWatch for Vibe Coding 为 Codex、ChatGPT、Claude Code 和 IDE 工作流
 | Codex 周额度、当天消耗和重置倒计时 | 已完成，支持本地使用和可选的跨 Mac 统一统计 |
 | Codex 状态反馈 | 已完成，顶部只表示通讯状态，四个 Agent 点显示槽位颜色、亮度和动态效果 |
 | 最近四小时使用强度 | 已完成，24 格滚动窗口，每格 10 分钟；可合并多台 Mac 的设备活动 |
-| Classic / Pet 与 OpenWatcher V2 两套 UI | 已完成，可在设备中切换 |
+| Codex Micro 与 OpenWatcher V2 两套 UI | 已完成，可在设备中切换；Official V1 / Classic Pet 已移除 |
 | 断线与音频异常处理 | 已完成，异常时结束本次听写，提示重录并自动重建音频链路 |
 | 省电、息屏和自动关机 | 已完成，日常混合使用约为 5 小时级 |
 
@@ -68,20 +70,12 @@ M5 StopWatch for Vibe Coding 为 Codex、ChatGPT、Claude Code 和 IDE 工作流
 
 ## 两套界面
 
-<table>
-  <tr>
-    <th width="50%">Classic / Pet</th>
-    <th width="50%">OpenWatcher V2</th>
-  </tr>
-  <tr>
-    <td align="center"><img alt="Classic Pet UI" src="docs/assets/classic-pet-ui.svg" width="360"></td>
-    <td align="center"><img alt="OpenWatcher V2 UI" src="docs/assets/openwatcher-v2-ui.svg" width="360"></td>
-  </tr>
-  <tr>
-    <td>延续项目最早的桌面伙伴方向，以时间、额度弧线、Pet 动画和轻量状态反馈为核心。适合喜欢角色感和动态反馈的用户。</td>
-    <td>当前重点优化的效率界面。信息层级更直接，强调剩余额度、当天消耗、四小时活动热力图和未读任务状态。</td>
-  </tr>
-</table>
+- **Codex Micro**：黑底圆形仪表盘，聚焦原生 Agent 状态、会话与额度。
+- **OpenWatcher V2**：强调剩余额度、当天消耗、四小时活动热力图和未读任务状态。
+
+![OpenWatcher V2 界面](docs/assets/openwatcher-v2-ui.svg)
+
+2026-09-17 起，Official V1 / Classic Pet 及其逐帧动画不再编入手表主固件；旧设置值会回退到 Codex Micro。缩小的是 factory 应用镜像，FAT `storage` 分区容量不变。新固件已刷入手表，但两套页面和输入操作还需实机回归。
 
 ### OpenWatcher V2 的设计重点
 
@@ -96,7 +90,7 @@ OpenWatcher V2 的界面方向参考了 [OpenWatcher](https://github.com/openwat
 
 ## v0.10.0：从状态屏到 Codex 物理控制器
 
-本版本把 StopWatch 已有的 BLE 键盘、麦克风和圆形触摸屏整合为一套 Codex Micro 兼容交互，同时保留原来的语音输入与两套 UI。
+本历史版本把 StopWatch 已有的 BLE 键盘、麦克风和圆形触摸屏整合为一套 Codex Micro 兼容交互，并在当时保留语音输入与两套 UI；当前主题请以上文为准。
 
 ### 四个 Agent 快捷入口
 
@@ -169,7 +163,7 @@ Bridge 支持 Typeless 和微信输入法两种输入路径，也可以配合任
 - [Codex 额度机制](docs/QUOTA.md)
 - [跨设备统计同步与 API](docs/stopwatch-cloud-sync.md)
 - [隐私与安全](docs/SECURITY_AND_PRIVACY.md)
-- [Pet 自定义](docs/PET_CUSTOMIZATION.md)
+- [Pet 自定义（历史资料，当前固件已移除 Pet）](docs/PET_CUSTOMIZATION.md)
 - [Agent 与二次开发指南](docs/AGENT_DEVELOPMENT_GUIDE.md)
 
 ## 为 Agent 和二次开发准备的说明书

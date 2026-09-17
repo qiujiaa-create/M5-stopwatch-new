@@ -21,7 +21,6 @@ static constexpr const char* kCodexSettingsNs = "codex";
 static constexpr const char* kCodexThemeKey = "theme";
 static constexpr const char* kCodexThemeGenerationKey = "theme_gen";
 static constexpr const char* kCodexThemeMicroDashboard = "codex_micro_dashboard";
-static constexpr const char* kCodexThemeOfficialV1 = "official_v1";
 static constexpr const char* kCodexThemeOpenWatcherV2 = "openwatcher_v2";
 
 namespace setup_workers {
@@ -366,8 +365,7 @@ public:
         _title->align(LV_ALIGN_TOP_MID, 0, 54);
 
         createThemeButton(103, "Codex Micro", kCodexThemeMicroDashboard, 0x126C63);
-        createThemeButton(203, "Official V1", kCodexThemeOfficialV1, 0x2C3F66);
-        createThemeButton(303, "OpenWatcher V2", kCodexThemeOpenWatcherV2, 0x14506A);
+        createThemeButton(253, "OpenWatcher V2", kCodexThemeOpenWatcherV2, 0x14506A);
     }
 
     const std::string& selectedTheme() const
@@ -542,7 +540,6 @@ CodexThemeWorker::CodexThemeWorker()
     Settings settings(kCodexSettingsNs, false);
     const std::string theme = settings.GetString(kCodexThemeKey, kCodexThemeMicroDashboard);
     const bool known = theme == kCodexThemeMicroDashboard ||
-                       theme == kCodexThemeOfficialV1 ||
                        theme == kCodexThemeOpenWatcherV2;
     _view = std::make_unique<CodexThemeView>(known ? theme : kCodexThemeMicroDashboard);
 }

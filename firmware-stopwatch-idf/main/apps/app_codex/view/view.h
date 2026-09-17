@@ -20,7 +20,6 @@ class CodexView {
 public:
     enum class ThemeMode : uint8_t {
         CodexMicroDashboard,
-        OfficialV1,
         OpenWatcherV2,
     };
 
@@ -115,37 +114,9 @@ public:
     bool codexLiveActive() const;
 
 private:
-    struct SemicircleQuota {
-        std::unique_ptr<uitk::lvgl_cpp::Container> canvas;
-        std::unique_ptr<uitk::lvgl_cpp::Label> todayCaption;
-        std::unique_ptr<uitk::lvgl_cpp::Label> todayValue;
-        std::unique_ptr<uitk::lvgl_cpp::Label> remainingCaption;
-        std::unique_ptr<uitk::lvgl_cpp::Label> remainingValue;
-        std::unique_ptr<uitk::lvgl_cpp::Label> resetLabel;
-    };
-
     std::unique_ptr<uitk::lvgl_cpp::Container> _panel;
     ThemeMode _theme_mode = ThemeMode::CodexMicroDashboard;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _clock_panel;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _clock_hour_panel;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _clock_minute_panel;
-    std::unique_ptr<uitk::lvgl_cpp::NumberFlow> _clock_hour_flow;
-    std::unique_ptr<uitk::lvgl_cpp::NumberFlow> _clock_minute_flow;
-    std::unique_ptr<uitk::lvgl_cpp::Label> _clock_colon;
-    SemicircleQuota _semicircle_quota;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_hit_area;
-    std::unique_ptr<uitk::lvgl_cpp::Image> _pet_image;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_glow;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_shadow;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_left_tab;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_right_tab;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_side_button;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_body;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_screen;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _pet_highlight;
-    std::unique_ptr<uitk::lvgl_cpp::Label> _pet_face;
     std::unique_ptr<uitk::lvgl_cpp::Label> _message_label;
-    std::unique_ptr<uitk::lvgl_cpp::Image> _message_image;
     std::unique_ptr<uitk::lvgl_cpp::Container> _voice_waveform;
     std::array<std::unique_ptr<uitk::lvgl_cpp::Container>, 9> _voice_bars;
     std::unique_ptr<uitk::lvgl_cpp::Container> _ble_dot;
@@ -192,20 +163,9 @@ private:
 
     State _state;
     uint32_t _last_quota_update_tick = 0;
-    uint32_t _last_clock_tick = 0;
     uint32_t _last_imu_update_tick = 0;
-    uint32_t _last_pet_update_tick = 0;
-    uint32_t _last_idle_tick = 0;
     uint32_t _last_shake_tick = 0;
-    uint32_t _pet_effect_until_tick = 0;
-    uint32_t _message_phrase_counter = 0;
     uint8_t _shake_trigger_count = 0;
-    float _tilt_x             = 0.0f;
-    float _tilt_y             = 0.0f;
-    float _shake_energy       = 0.0f;
-    bool _pet_pressed        = false;
-    uint32_t _suppress_pet_click_until_ms = 0;
-    bool _message_image_active = false;
     bool _clear_input_requested = false;
     bool _action_touch_tracking = false;
     bool _action_wheel_active = false;
@@ -257,26 +217,6 @@ private:
     int _reasoning_swipe_step = 0;
     int _reasoning_delta_request = 0;
     VoiceMode _voice_mode = VoiceMode::Idle;
-    enum class PetAnim {
-        Idle,
-        Blink,
-        Touch,
-        LookAround,
-        Stretch,
-    };
-    PetAnim _pet_anim = PetAnim::Idle;
-    uint32_t _pet_anim_start_tick = 0;
-    uint32_t _next_blink_tick = 0;
-    uint32_t _next_idle_action_tick = 0;
-    uint8_t _idle_action_kind = 0;
-    const void* _pet_current_src = nullptr;
-
-    void initSemicircleQuota();
-    void updateSemicircleQuota();
-    static void drawSemicircleQuotaEvent(lv_event_t* event);
-    void drawSemicircleQuota(lv_layer_t* layer, const lv_area_t& coords);
-    void initFlipClock();
-    void updateFlipClock(bool force = false);
     void initOpenWatcherV2();
     void updateOpenWatcherV2Labels();
     void updateNativeAgentRail(bool force = false);
@@ -308,16 +248,11 @@ private:
     void updateReasoningControlLabel();
     static void drawReasoningControlEvent(lv_event_t* event);
     void drawReasoningControl(lv_layer_t* layer, const lv_area_t& coords);
-    void initPet();
-    void updatePet();
     void initVoiceWaveform();
     void updateVoiceWaveform();
-    void setPetFrame(const void* src);
     void updateMotionInput();
     void setMessage(const char* message, uint32_t ttlMs);
-    void setMessageImage(const void* src, uint32_t ttlMs);
     void setMessageText(const std::string& message);
-    void setIdleMessageImage(uint32_t salt);
     void updateConnectionDots();
     float remainingRatio(const QuotaSlot& slot) const;
 };

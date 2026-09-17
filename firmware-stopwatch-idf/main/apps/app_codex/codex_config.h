@@ -35,9 +35,6 @@ constexpr bool kEnableAudioOutput = true;
 constexpr bool kEnableAudioInput = true;
 constexpr bool kEnableAudioCodecInputPath = true;
 
-constexpr float kTiltFilterAlpha = 0.12f;
-constexpr float kTiltMaxOffset = 12.0f;
-constexpr float kShakeMotionFloor = 220.0f;
 constexpr float kShakeThreshold = 460.0f;
 constexpr uint32_t kShakeCooldownMs = 1500;
 
