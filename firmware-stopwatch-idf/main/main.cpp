@@ -6,6 +6,7 @@
 #include <smooth_ui_toolkit.hpp>
 #include <uitk/short_namespace.hpp>
 #include <apps/app_codex/codex_config.h>
+#include <apps/app_focus/focus_timer.h>
 #include <mooncake_log.h>
 #include <mooncake.h>
 #include <apps/apps.h>
@@ -15,6 +16,7 @@
 #include <ssid_manager.h>
 #include <wifi_manager.h>
 #include <algorithm>
+#include <esp_timer.h>
 #include <iterator>
 
 using namespace mooncake;
@@ -94,6 +96,7 @@ extern "C" void app_main(void)
 
     // Install apps
     GetMooncake().installApp(std::make_unique<AppCodex>());
+    GetMooncake().installApp(std::make_unique<AppFocus>());
     // 「Xiaozhi」入口与 Codex 同级，放在 Codex 右边一格
     GetMooncake().installApp(std::make_unique<AppXiaozhi>());
     GetMooncake().installApp(std::make_unique<AppLauncher>());
@@ -106,6 +109,7 @@ extern "C" void app_main(void)
     // Main loop
     while (1) {
         GetHAL().feedTheDog();
+        focus::pollBackground(static_cast<uint64_t>(esp_timer_get_time()) / 1000);
         GetHAL().updateActivityMonitor();
         if (!GetHAL().isActivitySleeping()) {
             GetMooncake().update();
