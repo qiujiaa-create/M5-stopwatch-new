@@ -1,6 +1,6 @@
 # 当前功能与系统组成
 
-文档版本：0.2；最后更新：2026-09-17 14:26。
+文档版本：0.3；最后更新：2026-09-17 18:45。
 
 本文描述当前源码实现。安装和实机验收状态以 [PROJECT_STATE.md](../PROJECT_STATE.md) 为准。
 
@@ -8,7 +8,7 @@
 
 | 系统 | 启动槽 | 功能 | 切换 |
 | --- | --- | --- | --- |
-| StopWatch 主固件 | `factory` | Launcher、设置、Codex 页面、BLE HID、BLE 麦克风 | Launcher 或 Setup 的小智入口检查镜像后写入启动槽并重启 |
+| StopWatch 主固件 | `factory` | Launcher、设置、Codex 页面、独立 Focus 计时、BLE HID、BLE 麦克风 | Launcher 或 Setup 的小智入口检查镜像后写入启动槽并重启 |
 | 小智 v2.2.6 板卡适配 | `ota_0` | 独立的小智语音系统 | 长按 B 约 3 秒或调用小智侧 MCP 返回工具，重启到 `factory` |
 
 双固件分区布局见 `firmware-stopwatch-idf/partitions.csv` 与 `firmware-xiaozhi/partitions/stopwatch_dual.csv`。两边不能同时运行；切换不是 Codex 页面内的主题切换。小智板卡实现见 `firmware-xiaozhi/main/boards/m5stack/stopwatch/stopwatch.cc`。该实现和槽位存在不等于当前设备已完成小智语音对话验收。
@@ -22,6 +22,12 @@
 - 两套主题共用按键和语音状态机。四个 Agent 点有触摸预览和约 480 ms 长按确认；顶部左右滑动发送原生 Encoder；中心长按后发送四向 Radial，松手归中。
 
 显示按实际 466×466 圆屏设计。V2 Agent 可见圆点已放大，透明触摸区与可见点分开。灯效状态只控制显示；是否能发送 Agent 操作取决于 Vendor HID 传输是否就绪。
+
+## Focus 本地专注计时
+
+Launcher 的 Focus 应用提供 A 正计时和 B 固定 25 分钟倒计时，互斥运行。正计时显示到十分之一秒。A/B 短按对应计时的开始、暂停、继续；仅在 `PAUSED` 时长按对应键才复位。双击不触发结束动作。触屏可选择模式、操作计时，`RESET` 只在暂停时出现；A+B 长按返回 Launcher。倒计时到零显示 `DONE` 并振动一次。
+
+计时状态仅在手表内存中保存。离开页面或屏幕休眠后继续计时，设备重启后重新初始化。Focus 不需要 TickTick 账号、Mac Bridge、Wi-Fi 或新的 BLE 协议；Codex 页面里的 A/B 语音操作仍按原状态机执行。操作表见 [Focus 使用说明](FOCUS.md)，安装和实机验证范围见 [项目状态](../PROJECT_STATE.md)。
 
 ## 三条独立链路
 

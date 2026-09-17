@@ -1,10 +1,12 @@
 # M5 StopWatch Vibe Coding Firmware
 
-Document version: 0.2. Last updated: 2026-09-17 14:26.
+Document version: 0.3. Last updated: 2026-09-17 18:45.
 
-ESP-IDF firmware for the M5Stack StopWatch `factory` slot. The current Codex app has two themes, Codex Micro and OpenWatcher V2; Official V1 / Classic Pet has been removed. This firmware also provides standard BLE HID, Codex Vendor HID Agent/Encoder/Radial controls, a real-time BLE microphone, quota/activity panels, power management, and a checked switch into the separate Xiaozhi `ota_0` firmware.
+ESP-IDF firmware for the M5Stack StopWatch `factory` slot. The current Codex app has two themes, Codex Micro and OpenWatcher V2; Official V1 / Classic Pet has been removed. A separate local Focus app provides count-up and 25-minute countdown timers. This firmware also provides standard BLE HID, Codex Vendor HID Agent/Encoder/Radial controls, a real-time BLE microphone, quota/activity panels, power management, and a checked switch into the separate Xiaozhi `ota_0` firmware.
 
 For the module map, touch parameters, BLE protocols and safe secondary-development workflow, read [Agent and secondary-development guide](../docs/AGENT_DEVELOPMENT_GUIDE.md).
+
+For the Focus key controls, paused reset, tenths display, and timer persistence, read the [Focus user guide](../docs/FOCUS.md).
 
 ## Build
 

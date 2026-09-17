@@ -1,6 +1,6 @@
 # Agent instructions
 
-Document version: 1.2. Last updated: 2026-09-17 14:26.
+Document version: 1.3. Last updated: 2026-09-17 18:45.
 
 This repository contains the StopWatch ESP-IDF firmware (factory), a separate Xiaozhi firmware (ota_0), a macOS BLE companion, and a Core Audio virtual microphone. Read `PROJECT_STATE.md` and `docs/AGENT_DEVELOPMENT_GUIDE.md` before changing behavior. The state file records current acceptance; older guide claims may describe historical behavior only.
 
@@ -17,6 +17,7 @@ Use a separate branch or worktree for each task. Only one AI should edit a given
 - A recording interruption is an error for the current utterance. Stop and ask the user to record again; do not silently splice a missing middle section.
 - Keep Wi-Fi disabled by default unless a requested feature requires it. Prefer the existing BLE source of truth for live state.
 - Do not change the BLE audio format, HID Report Map, partition table, VID/PID, or bond schema as a side effect of a UI task.
+- When adding or changing user-facing behavior, update the relevant README, feature/user guide, `PROJECT_STATE.md`, and the Unreleased section of `CHANGELOG.md` in the same task. Keep document versions and last-updated times current. Record build, flash, and physical interaction evidence separately; never label an untested interaction as accepted.
 
 ## Privacy
 

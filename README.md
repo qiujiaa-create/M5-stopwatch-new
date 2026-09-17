@@ -1,6 +1,6 @@
-# M5 StopWatch：Codex 控制器与小智双固件
+# M5 StopWatch：Codex 控制器、Focus 计时与小智双固件
 
-文档版本：0.2；最后更新：2026-09-17 14:26。
+文档版本：0.3；最后更新：2026-09-17 18:45。
 
 当前源码版本：**固件 v0.10.7 / macOS Bridge v1.4.1**。版本号是源码元数据，具体设备安装版本以实机验证为准。
 
@@ -12,7 +12,7 @@
 
 | 路径 | 运行位置 | 当前作用 |
 | --- | --- | --- |
-| `firmware-stopwatch-idf/` | 手表 `factory` 槽 | Launcher、设置、Codex App、标准 BLE HID、Codex Vendor HID、BLE 麦克风 |
+| `firmware-stopwatch-idf/` | 手表 `factory` 槽 | Launcher、设置、Codex App、独立 Focus 计时、标准 BLE HID、Codex Vendor HID、BLE 麦克风 |
 | `firmware-xiaozhi/` | 手表 `ota_0` 槽 | 基于小智 v2.2.6 的 StopWatch 板卡适配和独立语音系统 |
 | `tools/typeless_bridge/` | macOS | BLE Companion、额度/状态同步、Typeless 协调、音频解码与虚拟输出 |
 | `tools/typeless_bridge/virtual_mic_driver/` | macOS | `M5 StopWatch Mic` Core Audio 设备 |
@@ -30,6 +30,12 @@
 - 四个 Agent 点支持触碰预览与约 480 ms 长按提交；顶部左右滑动发送原生 Encoder 事件；中心长按后可输出四向 Radial，松手归中。Agent 灯效用于显示，能否发送由 Vendor HID 就绪状态决定。
 
 Codex 当前页面只有**被动显示**的额度状态；5H 低额不会另行发声或振动提醒。Bridge 可在 Mac 本机采集 Codex 额度，经 BLE 推送 5H（18000 秒）与周（604800 秒）窗口。缺失、过期或异常数据保留未知状态。录音期间新面板暂存，回到空闲后补发。Today 是从北京时间 08:00 起的周额度百分点消耗，并非官方独立的每日额度。细节见 [额度机制](docs/QUOTA.md)。
+
+## Focus 本地专注计时
+
+Launcher 中的 **Focus** 是独立应用，计时完全在手表本地进行，不连接 Mac 上的 TickTick。A 键控制正计时，秒数右侧显示十分之一秒；B 键控制固定 25 分钟倒计时。短按对应按键开始、暂停或继续；仅在 `PAUSED` 时长按该按键，A 归零到 `00:00.0`、B 重置到 `25:00`。双击不再用于结束计时。页面还提供模式、主操作和暂停时的 `RESET` 触屏按钮；A+B 长按返回 Launcher。
+
+启动另一种计时会暂停正在运行的计时。离开 Focus 或屏幕休眠后，计时仍在内存中继续；设备重启后计时状态清空。倒计时归零时显示 `DONE` 并振动一次。详细操作和状态说明见 [Focus 使用说明](docs/FOCUS.md)；当前镜像与实机验收边界见 [项目状态](PROJECT_STATE.md)。
 
 ## 实时语音与音频发送
 
@@ -62,6 +68,7 @@ tools/typeless_bridge/build_stopwatch_ble_bridge.sh
 ## 文档导航
 
 - [功能与系统组成](docs/FEATURES.md)
+- [Focus 本地专注计时](docs/FOCUS.md)
 - [小智集成的现状与历史方案](docs/xiaozhi-integration-plan.md)
 - [额度机制](docs/QUOTA.md) · [跨 Mac 统计](docs/stopwatch-cloud-sync.md)
 - [BLE 麦克风](docs/stopwatch-ble-microphone.md) · [隐私与安全](docs/SECURITY_AND_PRIVACY.md)
