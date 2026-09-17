@@ -102,8 +102,8 @@ constexpr std::array<NativeAgentPoint, 4> kNativeAgentCenters = {{
     {282, 417},
     {367, 367},
 }};
-// The visible dots remain compact. This is an invisible finger target; the
-// four 84 px squares stay separate at the current arc spacing.
+// Scale only the visible dots; the four invisible finger targets remain separate.
+constexpr int kNativeAgentDotScale = 2;
 constexpr int kNativeAgentHitSize = 84;
 constexpr int kNativeAgentHitHalf = kNativeAgentHitSize / 2;
 constexpr int kScreenSize = 466;
@@ -2319,7 +2319,7 @@ void CodexView::initOpenWatcherV2()
                             this);
 
         auto dot = std::make_unique<Container>(hit->get());
-        dot->setSize(10, 10);
+        dot->setSize(10 * kNativeAgentDotScale, 10 * kNativeAgentDotScale);
         dot->align(LV_ALIGN_CENTER, 0, 0);
         dot->setRadius(LV_RADIUS_CIRCLE);
         dot->setBgColor(lv_color_hex(kOwTrack));
@@ -2430,7 +2430,7 @@ void CodexView::updateNativeAgentRail(bool force)
         const bool preview = _native_agent_touch_tracking &&
                              _native_agent_touch_candidate == static_cast<int>(index);
         uint32_t color = active && agent.color != 0 ? agent.color : kOwTrack;
-        int size = active ? 14 : 10;
+        int size = (active ? 14 : 10) * kNativeAgentDotScale;
         int opacity = active
                           ? static_cast<int>(std::lround(175.0f + 80.0f * clamp01(agent.brightness)))
                           : 72;
@@ -2440,10 +2440,12 @@ void CodexView::updateNativeAgentRail(bool force)
                                 period_ms;
             const float pulse = 0.5f + 0.5f * std::sin(phase * 6.28318530718f);
             if (agent.effect == 4) {
-                size = 13 + static_cast<int>(std::lround(4.0f * pulse));
+                size = (13 + static_cast<int>(std::lround(4.0f * pulse))) *
+                       kNativeAgentDotScale;
                 opacity = 120 + static_cast<int>(std::lround(135.0f * pulse));
             } else {
-                size = 14 + static_cast<int>(std::lround(2.0f * pulse));
+                size = (14 + static_cast<int>(std::lround(2.0f * pulse))) *
+                       kNativeAgentDotScale;
                 opacity = 185 + static_cast<int>(std::lround(70.0f * pulse));
             }
             opacity = static_cast<int>(std::lround(opacity *
@@ -2455,7 +2457,8 @@ void CodexView::updateNativeAgentRail(bool force)
                                        ? 1.0f
                                        : clamp01(static_cast<float>(elapsed) /
                                                  static_cast<float>(kNativeAgentHoldMs));
-            size = 18 + static_cast<int>(std::lround(8.0f * progress));
+            size = (18 + static_cast<int>(std::lround(8.0f * progress))) *
+                   kNativeAgentDotScale;
             opacity = 255;
             color = active && agent.color != 0 ? agent.color : kOwBlue;
         }
