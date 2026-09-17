@@ -1,15 +1,16 @@
 # Agent instructions
 
-Document version: 1.1. Last updated: 2026-09-16 22:34.
+Document version: 1.2. Last updated: 2026-09-17 14:26.
 
-This repository contains an ESP-IDF firmware, a macOS BLE companion, and a Core Audio virtual microphone. Read `PROJECT_STATE.md` and `docs/AGENT_DEVELOPMENT_GUIDE.md` before changing behavior. The state file records current acceptance; older guide claims may describe historical behavior only.
+This repository contains the StopWatch ESP-IDF firmware (factory), a separate Xiaozhi firmware (ota_0), a macOS BLE companion, and a Core Audio virtual microphone. Read `PROJECT_STATE.md` and `docs/AGENT_DEVELOPMENT_GUIDE.md` before changing behavior. The state file records current acceptance; older guide claims may describe historical behavior only.
 
 Use a separate branch or worktree for each task. Only one AI should edit a given worktree at a time. Preserve this import baseline and record build, installed artifact, and physical-device verification as distinct outcomes.
 
 ## Working rules
 
 - Preserve the three independent paths: standard BLE HID, Codex Vendor HID, and BLE microphone/Companion.
-- Both Classic / Pet and OpenWatcher V2 must use the same A/B voice state machine.
+- Codex Micro and OpenWatcher V2 are the two current Codex themes and must use the same A/B voice state machine. Official V1 / Classic Pet is removed.
+- Xiaozhi is a separate bootable firmware. Verify the selected slot and its own behavior independently of the Codex themes.
 - Design every StopWatch screen for the real 466×466 circular AMOLED. Keep primary confirmation actions near the vertical center, not the clipped corners.
 - Do not replace native Codex Micro Agent, Encoder, or Radial events with a virtual mouse or keyboard unless the user explicitly requests it.
 - Agent light assignment controls display only. Transport readiness is authoritative for whether an Agent action can be sent.

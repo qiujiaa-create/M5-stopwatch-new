@@ -1,6 +1,10 @@
-# 小智 AI 接入方案（M5 StopWatch，保留 Codex 与现有系统功能）
+# 小智 AI 接入方案（历史设计稿）
 
-> 状态：**方案评审稿，尚未实施**。所有代码改动待确认后执行。
+文档版本：0.2；最后更新：2026-09-17 14:26。
+
+**当前状态：**本文件保留 2026-09-16 的方案推演、风险和当时的上游比较，以下“尚未实施”、旧分区尺寸、固件体积和待办顺序均为历史快照，不能作为现在的构建或刷写指引。现已采用**双固件启动槽**：StopWatch/Codex 在 `factory`（6 MiB），小智 v2.2.6 板卡适配在 `ota_0`（3 MiB），`storage` 为 4 MiB。主固件通过 Launcher/Setup 检查小智镜像并切换，小智可长按 B 约 3 秒或调用 MCP 返回工具切回。当前设备安装/语音验收以 [项目状态](../PROJECT_STATE.md) 为准；实际分区以 `firmware-stopwatch-idf/partitions.csv` 和 `firmware-xiaozhi/partitions/stopwatch_dual.csv` 为准。
+
+> 历史状态：此处记录当时的方案评审稿；现在已有双固件实现。
 > 依据：本仓库现有固件 `firmware-stopwatch-idf`（v0.10.7 / ESP-IDF v5.5.4）、上游 `78/xiaozhi-esp32`。
 > 日期：2026-09-16
 

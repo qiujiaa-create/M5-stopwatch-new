@@ -1,6 +1,6 @@
 # M5 StopWatch 当前状态
 
-文档版本：0.4；最后更新：2026-09-17 12:07。
+文档版本：0.5；最后更新：2026-09-17 14:26。
 
 ## 本目录是什么
 
@@ -28,16 +28,17 @@ Git 版本不包含 ChatGPT.app、Typeless.app、已安装的音频驱动、登�
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 中心长按后的上、下、左、右四向 Radial，手表反馈和 Codex 动作均正常。此结果仍不代表本目录新构建产物已刷入手表。
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 顶部向左、向右滑动分别降低、提高 Codex 推理等级。故障原因是本机 Codex Micro 的 `encoderMode` 为 `composer-navigation`，原生 Encoder 事件被用作上下导航。已将 `~/.codex/config.toml` 改为 `reasoning` 并保留原配置备份；运行中的 Codex 还需在「设置 → Codex Micro → Knob」选择 `Reasoning only` 才立即生效。Bridge 的 `codex_reasoning:native_sync` 日志本身不能代替 Codex 界面的操作结果。
 - **V2 页面说明**：底部的两个小圆点是 BLE 与 Wi-Fi 状态；线与圆点组成的图形是同步装饰。V2 当前没有第二页或页切换手势。Codex Micro 与 OpenWatcher V2 通过手表 Setup → Device → Codex Theme 选择。
-- **2026-09-17 本任务已验证**：从 Codex App 移除 Official V1 及其专属图片、逐帧宠物动画；原有 `official_v1` 设置回退到 Codex Micro。ESP-IDF 5.5.4 构建通过，应用镜像从 5,904,864 降至 4,025,456 字节，SHA-256 `8778bf86dfde834b6460f75e9774c9f41924b495eabfc1d1876bb1eae3a3cdf8`。设备分区表与构建完全一致、otadata 空白且设备从 factory 启动；仅执行 `app-flash` 并通过写后 hash 校验与串口启动、BLE 重新订阅。未安装本目录 Bridge、未改小智槽与持久数据分区。
+- **2026-09-17 早先任务的构建与刷写记录**：从 Codex App 移除 Official V1 及其专属图片、逐帧宠物动画；原有 `official_v1` 设置回退到 Codex Micro。ESP-IDF 5.5.4 构建通过，应用镜像从 5,904,864 降至 4,025,456 字节，SHA-256 `8778bf86dfde834b6460f75e9774c9f41924b495eabfc1d1876bb1eae3a3cdf8`。当时设备分区表与构建完全一致、otadata 空白且从 factory 启动；仅执行 `app-flash` 并通过写后 hash 校验与串口启动、BLE 重新订阅。此后仓库已有新提交，不能把该哈希当成当前 HEAD 的构建产物；当时未安装本目录 Bridge、未改小智槽与持久数据分区。
 - **待实机操作验证**：确认设置只列出两套主题、当前 Codex 页面能正常打开；再回归 V2 的 A/B 语音、四 Agent、推理滑动与四向 Radial。串口启动成功不代替这些操作结果。小智固件未在本次迁移中构建。
 - **容量边界**：缩小的是 factory 应用镜像，在 6 MiB factory 分区内增加约 1.79 MiB 余量；4 MiB FAT `storage` 分区容量未变化。
-- **小智**：独立启动槽；不要把它与主固件的两套 Codex 页面混为一项验收。
+- **小智**：独立启动槽，不是 Codex 页面。factory 的 Launcher/Setup 提供切到 ota_0 的确认入口，并先检查目标镜像；小智板卡实现提供 B 键长按 3 秒或 MCP 工具切回 factory。当前设备槽位及小智语音对话仍需单独复核。
+- **音频发送策略**：factory 仅在录音时采集并发送 20 ms IMA-ADPCM 帧；发送前最多等待 80 ms 的 NimBLE mbuf 恢复，保留至少 4 个 mbuf 给控制流量。丢帧由序号和计数暴露；Bridge 对明确中断结束本次听写并提示重录。此项是代码现状，不等同于本次新产物的实机音频验收。
 
 ## 从这里开始
 
 1. 先阅读本文件和 `WORKFLOW.md`。一个任务只由一个 AI 在一个工作目录里修改；其他 AI 用独立 worktree 审查或处理不同任务。
 2. V2 推理滑动与四向 Radial 已在当前安装组合上通过用户实机验证。后续新构建产物仍要逐层查触摸反馈、固件事件、BLE HID 与 Mac/Codex 最终效果。
-3. 本目录已通过 Bridge 与主固件构建，且当前主固件已刷入 factory。下次部署前仍须重新构建并记录产物哈希、确认设备分区、端口和当前启动槽。
+3. 本目录曾通过 Bridge 与主固件构建，且主固件曾刷入 factory。其后仓库仍有提交；下次部署前须重新构建并记录产物哈希、确认设备分区、端口和当前启动槽。
 4. 只有手表和 Codex 端的操作结果都通过，才将该任务标为“实机通过”。再考虑把这套组合标成稳定基线。
 
 构建入口与 ESP-IDF 版本见 `migration/ORIGINAL_SNAPSHOT_README.md`。本机参考配置在 `local-reference/`；它们不应直接作为公开配置提交。
