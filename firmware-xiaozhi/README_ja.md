@@ -1,3 +1,5 @@
+> **StopWatch integration note v0.2 (2026-09-17 14:26):** This is the upstream Xiaozhi README. The combined StopWatch project uses the `m5stack/stopwatch` board in the separate `ota_0` slot and `partitions/stopwatch_dual.csv`. Read the [project README](../README.md) and [current acceptance](../PROJECT_STATE.md) before building or flashing; the upstream feature list below is not a board acceptance record.
+
 # MCP ベースのチャットボット
 
 （日本語 | [中文](README_zh.md) | [English](README.md)）

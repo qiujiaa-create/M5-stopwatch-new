@@ -1,5 +1,9 @@
 # StopWatch Codex Weekly Semicircle UI
 
+文档版本：0.2；最后更新：2026-09-17 14:26。
+
+**历史设计稿：**本文描述已移除的 Official V1 / Classic Pet 布局，不是当前 Codex Micro 或 OpenWatcher V2 的实现依据。当前页面与 5H/周额度说明见 [功能说明](FEATURES.md) 和 [额度说明](QUOTA.md)。
+
 ## 圆屏几何
 
 物理 AMOLED 是 `466 x 466` 圆屏，圆心为 `(233, 233)`。重要元素必须满足真实圆屏边界，不按矩形画布近似。

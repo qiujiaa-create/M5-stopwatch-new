@@ -1,10 +1,17 @@
 # Changelog
 
+文档版本：0.2；最后更新：2026-09-17 14:26。
+
 本项目采用[语义化版本](https://semver.org/lang/zh-CN/)；所有版本更新都在这里记录，并使用同版本 Git 标签发布。
 
 此文件记录固件历史。Mac Bridge 独立更新：最新 **v1.4.1（2026-09-03）** 与固件 v0.10.7 增加麦克风就绪握手，避免开机或重连后的第一次听写无声。详见 [Bridge Changelog](tools/typeless_bridge/CHANGELOG.md)。
 
 ## [Unreleased]
+
+### Documentation — 2026-09-17
+
+- 将首页和功能说明改为当前双固件、两套 Codex 主题、5H/周额度及 BLE 音频发送策略；把小智方案和 Pet 指南明确标为历史资料。
+- 本节只记录文档同步，不代表新固件或 Bridge 构建、安装和实机验收。
 
 ## [0.10.7] - 2026-09-03
 

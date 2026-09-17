@@ -1,3 +1,5 @@
+> **StopWatch integration note v0.2 (2026-09-17 14:26):** This is the upstream Xiaozhi README, not the build or flash guide for this combined project. The StopWatch adaptation uses the `m5stack/stopwatch` board in the separate `ota_0` slot, with `partitions/stopwatch_dual.csv`. See [the project README](../README.md) and [current acceptance](../PROJECT_STATE.md) before building or flashing. Upstream feature lists below may not apply to this board.
+
 # An MCP-based Chatbot
 
 (English | [中文](README_zh.md) | [日本語](README_ja.md))
