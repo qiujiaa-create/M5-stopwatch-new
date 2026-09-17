@@ -1,8 +1,8 @@
 # Agent 与二次开发指南
 
-文档版本：0.2；最后更新：2026-09-16 22:34。
+文档版本：0.3；最后更新：2026-09-17 09:58。
 
-**现状提示：**本指南中的“已验证能力”包含历史验收记录，不代表 2026-09-16 导入的新工作目录或当前手表均已通过同样验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准；OpenWatcher V2 顶部推理滑动和中心四向 Radial 已被用户报告不可用，修复前不得标记为完成。
+**现状提示：**本指南中的“已验证能力”包含历史验收记录，不代表 2026-09-16 导入的新工作目录产物已通过同样验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准；2026-09-17 用户已在当前安装组合上确认 OpenWatcher V2 顶部推理滑动与中心四向 Radial 的 Codex 端实际效果。
 
 本文面向使用 Codex、Claude Code、Cursor 或其他代码 Agent 修改本项目的开发者，也适合第一次接触 ESP-IDF、LVGL、BLE HID 和 macOS Core Audio 的贡献者。
 
@@ -149,6 +149,8 @@ Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。�
 - 单次请求最多 8 步
 
 Bridge 收到 `codex_reasoning:native_sync` 后延迟刷新确认标签。只有原生通道不可用时，Bridge 才串行调用 Codex 命令面板回退；不要把回退改成并发输入。
+
+Codex Micro 宿主的旋钮模式须设为 `reasoning`，顶部滑动发送的 Encoder 事件才会改变推理等级。设为 `composer-navigation` 时，同一个原生事件用于界面导航。设备触觉反馈、Vendor HID 通知成功和 Bridge 的 `native_sync` 日志都不能代替 Codex 界面的真实等级变化验收。
 
 ### 4.4 中心四向 Radial
 
