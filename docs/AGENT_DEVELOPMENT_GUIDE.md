@@ -1,6 +1,6 @@
 # Agent 与二次开发指南
 
-文档版本：0.5；最后更新：2026-09-17 14:26。
+文档版本：0.6；最后更新：2026-09-17 18:45。
 
 **现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录当时的固件已刷入 factory，但后续提交及页面、输入操作仍待单独验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。小智是 ota_0 的独立固件，不是第三套 Codex 页面。
 
@@ -17,7 +17,7 @@
 
 | 组件 | 版本 | 已验证能力 |
 | --- | --- | --- |
-| StopWatch 固件（factory） | v0.10.7 版本字段 | Codex Micro / OpenWatcher V2、A/B 键、摇晃、实时 BLE 麦克风、5H 与周额度、四小时热力图、四 Agent、推理滑动、中心四向 Radial、持久化配对保护、Vendor HID 在线自校验、开机录音就绪门控与 BLE 音频背压 |
+| StopWatch 固件（factory） | v0.10.7 版本字段 | Codex Micro / OpenWatcher V2、独立 Focus 本地计时、A/B 键、摇晃、实时 BLE 麦克风、5H 与周额度、四小时热力图、四 Agent、推理滑动、中心四向 Radial、持久化配对保护、Vendor HID 在线自校验、开机录音就绪门控与 BLE 音频背压 |
 | 小智固件（ota_0） | v2.2.6 上游基础 | StopWatch 板卡适配与独立启动槽；构建、当前启动槽和语音对话验收分别记录 |
 | macOS Bridge | v1.4.1 | 麦克风就绪握手、可选跨 Mac 额度与活动同步；保留 BLE Companion、Typeless、HID 恢复、固定虚拟输出和路由异常静音 |
 | 虚拟麦克风 | `M5 StopWatch Mic` | Bridge 解码 16 kHz 单声道 PCM，经采样率转换写入虚拟设备；当前回环验收设置为 48 kHz 双声道 |
@@ -69,6 +69,7 @@ Mac 本机 Codex 状态
 | --- | --- | --- |
 | Codex App 控制器 | `firmware-stopwatch-idf/main/apps/app_codex/app_codex.cpp` | 汇总按键、触摸请求、BLE 状态、额度和录音状态 |
 | Codex UI | `firmware-stopwatch-idf/main/apps/app_codex/view/view.cpp`、`view.h` | 两套 UI、热力图、波形、四 Agent、推理面板、中心四向控制 |
+| Focus 本地计时 | `firmware-stopwatch-idf/main/apps/app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp` | 正计时、25 分钟倒计时、A/B 短按与暂停长按复位、圆屏 UI；不使用 Mac Bridge |
 | Codex 配置 | `firmware-stopwatch-idf/main/apps/app_codex/codex_config.h` | 示例 URL、刷新周期、Wi-Fi 占位符和输入默认值 |
 | 面板解析 | `firmware-stopwatch-idf/main/apps/app_codex/codex_quota_client.cpp` | 接收 Bridge/HTTP 面板，解析额度、活动和推理标签 |
 | BLE Companion | `firmware-stopwatch-idf/main/hal/ble_bridge.cpp`、`ble_bridge.h` | 配对、标准按键、Bridge 状态、面板分片和 task 摘要 |
@@ -109,6 +110,8 @@ Mac 本机 Codex 状态
 | A+B | 退出 Codex App | 回到设备 Launcher |
 
 Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。修改输入逻辑时必须同时验证 Codex Micro 和 OpenWatcher V2，因为两套 UI 共用同一交互状态机。
+
+Launcher 的独立 Focus 应用使用 A/B 做本地计时：短按开始、暂停或继续；对应计时处于 `PAUSED` 时长按约 500 ms 复位。这里没有双击结束动作，A+B 长按仍返回 Launcher。Focus 不改变上表所述 Codex App 与 Mac 的输入链路。页面及计时持久性见 [Focus 使用说明](FOCUS.md)。
 
 ### 4.2 四个 Agent 点
 
@@ -272,6 +275,7 @@ UI 支持 solid、breath、shallow breath 等宿主效果。Agent 点的触摸�
 | 中心手势死区/方向 | `kActionWheel*`、`kNativeControl*` | 标准键盘 HID |
 | Agent 协议 | `codex_micro_hid.cpp` | Companion characteristic UUID |
 | A/B 语音交互 | `app_codex.cpp` + Bridge 状态机 | 两套 UI 分别写不同逻辑 |
+| Focus 计时或页面 | `app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp` | Codex A/B 语音、BLE HID、Bridge |
 | 波形刷新或 UI 功耗 | `CodexView::frameIntervalMs()` 和差分刷新 | BLE connection interval |
 | 音频格式/帧长 | `ble_microphone.cpp`、`ima_adpcm.*`、Bridge 解码 | 只改一端 |
 | Mac 虚拟音频路由/静音 | `stopwatch_microphone.swift` + Bridge 录音预检 | BLE 格式、系统默认扬声器、配对与 HID |
@@ -298,6 +302,8 @@ rg -n "目标符号或参数" firmware-stopwatch-idf tools
 ```
 
 工作树可能包含用户尚未提交的改动。不要使用 `git reset --hard`、`git checkout --`、`git add .` 或批量覆盖与任务无关的文件。
+
+增改用户可见功能时，同步更新首页、对应功能说明、项目状态和 `CHANGELOG.md` 的 Unreleased 记录；文档版本及最后更新时间随内容更新。功能测试脚本也要保持与当前交互一致，不能把刷写校验写成实机操作验收。
 
 ### 7.2 构建固件
 

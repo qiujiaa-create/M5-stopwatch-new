@@ -1,6 +1,6 @@
 # M5 StopWatch 当前状态
 
-文档版本：0.5；最后更新：2026-09-17 14:26。
+文档版本：0.6；最后更新：2026-09-17 18:45。
 
 ## 本目录是什么
 
@@ -12,7 +12,7 @@
 
 | 路径 | 作用 | 状态 |
 | --- | --- | --- |
-| `firmware-stopwatch-idf/` | factory 槽的 StopWatch 主固件；Codex Micro 与 OpenWatcher V2、BLE HID 与 Companion | 本目录构建并刷入 factory；新固件的页面与输入操作尚待用户实机验收 |
+| `firmware-stopwatch-idf/` | factory 槽的 StopWatch 主固件；Codex Micro、OpenWatcher V2、独立 Focus、BLE HID 与 Companion | 本目录构建并刷入 factory；Focus 最新按键与显示、Codex 页面输入仍待完整实机验收 |
 | `tools/typeless_bridge/` | macOS Bridge；本机额度采集、BLE 推送、Typeless 协调 | 本目录构建成功；本次迁移未替换当前安装的 App |
 | `firmware-xiaozhi/` | ota_0 槽的小智 v2.2.6 及本机板卡适配 | 源码已导入；当前设备槽位需在再次切换后重核 |
 | `server/cloud-sync/` | 可选同步服务 | 本机盘点时未启用 |
@@ -29,6 +29,7 @@ Git 版本不包含 ChatGPT.app、Typeless.app、已安装的音频驱动、登�
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 顶部向左、向右滑动分别降低、提高 Codex 推理等级。故障原因是本机 Codex Micro 的 `encoderMode` 为 `composer-navigation`，原生 Encoder 事件被用作上下导航。已将 `~/.codex/config.toml` 改为 `reasoning` 并保留原配置备份；运行中的 Codex 还需在「设置 → Codex Micro → Knob」选择 `Reasoning only` 才立即生效。Bridge 的 `codex_reasoning:native_sync` 日志本身不能代替 Codex 界面的操作结果。
 - **V2 页面说明**：底部的两个小圆点是 BLE 与 Wi-Fi 状态；线与圆点组成的图形是同步装饰。V2 当前没有第二页或页切换手势。Codex Micro 与 OpenWatcher V2 通过手表 Setup → Device → Codex Theme 选择。
 - **2026-09-17 早先任务的构建与刷写记录**：从 Codex App 移除 Official V1 及其专属图片、逐帧宠物动画；原有 `official_v1` 设置回退到 Codex Micro。ESP-IDF 5.5.4 构建通过，应用镜像从 5,904,864 降至 4,025,456 字节，SHA-256 `8778bf86dfde834b6460f75e9774c9f41924b495eabfc1d1876bb1eae3a3cdf8`。当时设备分区表与构建完全一致、otadata 空白且从 factory 启动；仅执行 `app-flash` 并通过写后 hash 校验与串口启动、BLE 重新订阅。此后仓库已有新提交，不能把该哈希当成当前 HEAD 的构建产物；当时未安装本目录 Bridge、未改小智槽与持久数据分区。
+- **2026-09-17 Focus 任务的构建与刷写记录**：Launcher 已加入独立的本地 Focus 应用，A 正计时显示十分之一秒，B 固定 25 分钟倒计时；短按开始/暂停/继续，暂停时长按对应键复位，双击不执行结束。运行计时在离开页面或屏幕休眠后继续，设备重启后清空。最终镜像由 ESP-IDF 5.5.4 构建，4,111,648 字节，SHA-256 `25d5a7e919437c12d3b2c3302f9066277df7858fa48e08b64e802ca89e9c1df5`；主机计时测试通过，`app-flash` 仅写入 `factory` 应用偏移 `0x20000`，写后哈希校验通过并自动重启一次。用户反馈初版 Focus 曾正常打开和操作；最新十分之一秒显示与 A/B 暂停长按复位仍待实机确认。操作说明见 [Focus 使用说明](docs/FOCUS.md)。
 - **待实机操作验证**：确认设置只列出两套主题、当前 Codex 页面能正常打开；再回归 V2 的 A/B 语音、四 Agent、推理滑动与四向 Radial。串口启动成功不代替这些操作结果。小智固件未在本次迁移中构建。
 - **容量边界**：缩小的是 factory 应用镜像，在 6 MiB factory 分区内增加约 1.79 MiB 余量；4 MiB FAT `storage` 分区容量未变化。
 - **小智**：独立启动槽，不是 Codex 页面。factory 的 Launcher/Setup 提供切到 ota_0 的确认入口，并先检查目标镜像；小智板卡实现提供 B 键长按 3 秒或 MCP 工具切回 factory。当前设备槽位及小智语音对话仍需单独复核。
