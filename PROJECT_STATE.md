@@ -1,6 +1,6 @@
 # M5 StopWatch 当前状态
 
-文档版本：0.3；最后更新：2026-09-17 09:58（中国时间）。
+文档版本：0.4；最后更新：2026-09-17 12:07。
 
 ## 本目录是什么
 
@@ -12,7 +12,7 @@
 
 | 路径 | 作用 | 状态 |
 | --- | --- | --- |
-| `firmware-stopwatch-idf/` | factory 槽的 StopWatch 主固件；三套 Codex 页面、BLE HID 与 Companion | 本目录构建成功；尚未刷写或实机验收 |
+| `firmware-stopwatch-idf/` | factory 槽的 StopWatch 主固件；Codex Micro 与 OpenWatcher V2、BLE HID 与 Companion | 本目录构建并刷入 factory；新固件的页面与输入操作尚待用户实机验收 |
 | `tools/typeless_bridge/` | macOS Bridge；本机额度采集、BLE 推送、Typeless 协调 | 本目录构建成功；本次迁移未替换当前安装的 App |
 | `firmware-xiaozhi/` | ota_0 槽的小智 v2.2.6 及本机板卡适配 | 源码已导入；当前设备槽位需在再次切换后重核 |
 | `server/cloud-sync/` | 可选同步服务 | 本机盘点时未启用 |
@@ -27,16 +27,17 @@ Git 版本不包含 ChatGPT.app、Typeless.app、已安装的音频驱动、登�
 - **已由用户在原安装组合上确认**：OpenWatcher V2 显示 5H 与周额度，并曾自动刷新为 5H 6% / 周 28%。这证明当时 Bridge 到手表的额度链路有效，不证明本目录产物已安装。
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 中心长按后的上、下、左、右四向 Radial，手表反馈和 Codex 动作均正常。此结果仍不代表本目录新构建产物已刷入手表。
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 顶部向左、向右滑动分别降低、提高 Codex 推理等级。故障原因是本机 Codex Micro 的 `encoderMode` 为 `composer-navigation`，原生 Encoder 事件被用作上下导航。已将 `~/.codex/config.toml` 改为 `reasoning` 并保留原配置备份；运行中的 Codex 还需在「设置 → Codex Micro → Knob」选择 `Reasoning only` 才立即生效。Bridge 的 `codex_reasoning:native_sync` 日志本身不能代替 Codex 界面的操作结果。
-- **V2 页面说明**：底部的两个小圆点是 BLE 与 Wi-Fi 状态；线与圆点组成的图形是同步装饰。V2 当前没有第二页或页切换手势。三个 Codex 主题通过手表 Setup → Device → Codex Theme 选择。
-- **本目录已验证**：Bridge 独立编译成功；主固件使用 ESP-IDF 5.5.4 和 `local-reference/stopwatch-sdkconfig` 构建成功。主固件镜像约 5.9 MB，构建时提示 ota_0 的 3 MB 空间不足；主固件目标是 factory 槽。本次没有安装 Bridge 或刷写手表。
-- **待在新目录验证**：两者的配套运行，以及刷入后手表三个 Codex 主题和 A/B 语音链路的回归。小智固件未在本次迁移中构建。
-- **小智**：独立启动槽；不要把它与主固件的三个 Codex 页面混为一项验收。
+- **V2 页面说明**：底部的两个小圆点是 BLE 与 Wi-Fi 状态；线与圆点组成的图形是同步装饰。V2 当前没有第二页或页切换手势。Codex Micro 与 OpenWatcher V2 通过手表 Setup → Device → Codex Theme 选择。
+- **2026-09-17 本任务已验证**：从 Codex App 移除 Official V1 及其专属图片、逐帧宠物动画；原有 `official_v1` 设置回退到 Codex Micro。ESP-IDF 5.5.4 构建通过，应用镜像从 5,904,864 降至 4,025,456 字节，SHA-256 `8778bf86dfde834b6460f75e9774c9f41924b495eabfc1d1876bb1eae3a3cdf8`。设备分区表与构建完全一致、otadata 空白且设备从 factory 启动；仅执行 `app-flash` 并通过写后 hash 校验与串口启动、BLE 重新订阅。未安装本目录 Bridge、未改小智槽与持久数据分区。
+- **待实机操作验证**：确认设置只列出两套主题、当前 Codex 页面能正常打开；再回归 V2 的 A/B 语音、四 Agent、推理滑动与四向 Radial。串口启动成功不代替这些操作结果。小智固件未在本次迁移中构建。
+- **容量边界**：缩小的是 factory 应用镜像，在 6 MiB factory 分区内增加约 1.79 MiB 余量；4 MiB FAT `storage` 分区容量未变化。
+- **小智**：独立启动槽；不要把它与主固件的两套 Codex 页面混为一项验收。
 
 ## 从这里开始
 
 1. 先阅读本文件和 `WORKFLOW.md`。一个任务只由一个 AI 在一个工作目录里修改；其他 AI 用独立 worktree 审查或处理不同任务。
 2. V2 推理滑动与四向 Radial 已在当前安装组合上通过用户实机验证。后续新构建产物仍要逐层查触摸反馈、固件事件、BLE HID 与 Mac/Codex 最终效果。
-3. 本目录已通过 Bridge 与主固件构建。准备部署前重新构建并记录产物哈希，再确认设备分区、端口和当前启动槽，才决定是否刷写。
+3. 本目录已通过 Bridge 与主固件构建，且当前主固件已刷入 factory。下次部署前仍须重新构建并记录产物哈希、确认设备分区、端口和当前启动槽。
 4. 只有手表和 Codex 端的操作结果都通过，才将该任务标为“实机通过”。再考虑把这套组合标成稳定基线。
 
 构建入口与 ESP-IDF 版本见 `migration/ORIGINAL_SNAPSHOT_README.md`。本机参考配置在 `local-reference/`；它们不应直接作为公开配置提交。
