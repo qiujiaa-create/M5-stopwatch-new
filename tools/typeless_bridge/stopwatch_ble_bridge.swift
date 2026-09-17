@@ -1580,7 +1580,7 @@ private func buildDevicePanel() throws -> Data {
         "context_label": "\(100 - weeklyRemaining)% / WEEK",
         "context_pressure_pct": pressure,
         "compact_threshold_pct": 82,
-        "compact_warning": pressure >= 82,
+        "compact_warning": false,
         "total_tokens_label": "--",
         "model_label": "Codex",
         "reasoning_label": currentCodexThinkingEffort(),
