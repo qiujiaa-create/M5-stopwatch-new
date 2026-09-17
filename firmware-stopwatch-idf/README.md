@@ -1,6 +1,8 @@
 # M5 StopWatch Vibe Coding Firmware
 
-ESP-IDF firmware for the M5Stack StopWatch. It extends the upstream UserDemo with the Codex status UI, two UI themes, BLE HID input, real-time BLE microphone, Codex Micro compatible Agent/Encoder/Radial controls, quota/activity panels and power management.
+Document version: 0.2. Last updated: 2026-09-17 14:26.
+
+ESP-IDF firmware for the M5Stack StopWatch `factory` slot. The current Codex app has two themes, Codex Micro and OpenWatcher V2; Official V1 / Classic Pet has been removed. This firmware also provides standard BLE HID, Codex Vendor HID Agent/Encoder/Radial controls, a real-time BLE microphone, quota/activity panels, power management, and a checked switch into the separate Xiaozhi `ota_0` firmware.
 
 For the module map, touch parameters, BLE protocols and safe secondary-development workflow, read [Agent and secondary-development guide](../docs/AGENT_DEVELOPMENT_GUIDE.md).
 
@@ -28,4 +30,4 @@ idf.py build
 idf.py flash
 ```
 
-Use `idf.py app-flash` only when the device already has a compatible Bootloader and partition table. Firmware v0.10.0 changes the HID layout; after upgrading from v0.9.x, remove the old `M5Codex-*` entry from macOS Bluetooth settings and pair it again once.
+Use `idf.py app-flash` only when the device already has a compatible Bootloader and partition table. Check the exact USB port and active boot slot before flashing; record build, installed image, and device behavior separately. Firmware v0.10.0 changed the HID layout; after upgrading from v0.9.x, remove the old `M5Codex-*` entry from macOS Bluetooth settings and pair it again once.

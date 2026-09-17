@@ -1,8 +1,8 @@
 # Agent 与二次开发指南
 
-文档版本：0.4；最后更新：2026-09-17 12:07。
+文档版本：0.5；最后更新：2026-09-17 14:26。
 
-**现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录固件已刷入 factory，但新固件的页面与输入操作仍待用户验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 现只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。
+**现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录当时的固件已刷入 factory，但后续提交及页面、输入操作仍待单独验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。小智是 ota_0 的独立固件，不是第三套 Codex 页面。
 
 本文面向使用 Codex、Claude Code、Cursor 或其他代码 Agent 修改本项目的开发者，也适合第一次接触 ESP-IDF、LVGL、BLE HID 和 macOS Core Audio 的贡献者。
 
@@ -17,7 +17,8 @@
 
 | 组件 | 版本 | 已验证能力 |
 | --- | --- | --- |
-| StopWatch 固件 | v0.10.7 | 两套 UI、A/B 键、摇晃、实时 BLE 麦克风、额度、四小时热力图、四 Agent、推理滑动、中心四向 Radial、持久化配对保护、Vendor HID 在线自校验、开机录音就绪门控与 BLE 音频背压 |
+| StopWatch 固件（factory） | v0.10.7 版本字段 | Codex Micro / OpenWatcher V2、A/B 键、摇晃、实时 BLE 麦克风、5H 与周额度、四小时热力图、四 Agent、推理滑动、中心四向 Radial、持久化配对保护、Vendor HID 在线自校验、开机录音就绪门控与 BLE 音频背压 |
+| 小智固件（ota_0） | v2.2.6 上游基础 | StopWatch 板卡适配与独立启动槽；构建、当前启动槽和语音对话验收分别记录 |
 | macOS Bridge | v1.4.1 | 麦克风就绪握手、可选跨 Mac 额度与活动同步；保留 BLE Companion、Typeless、HID 恢复、固定虚拟输出和路由异常静音 |
 | 虚拟麦克风 | `M5 StopWatch Mic` | Bridge 解码 16 kHz 单声道 PCM，经采样率转换写入虚拟设备；当前回环验收设置为 48 kHz 双声道 |
 
@@ -116,7 +117,7 @@ Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。�
 | 参数 | 当前值 | 含义 |
 | --- | --- | --- |
 | `kNativeAgentCenters` | `(99,367)`、`(184,417)`、`(282,417)`、`(367,367)` | 四个可见点中心，适配 466×466 圆屏 |
-| `kNativeAgentHitSize` | `84 px` | 每个点的透明方形触摸区 |
+| `kNativeAgentHitSize` | `84 px` | 每个点的透明方形触摸区；V2 可见圆点现按 2 倍缩放 |
 | `kNativeAgentHoldMs` | `480 ms` | 从预览到真正提交的时间 |
 | `kNativeAgentPreviewFrameMs` | `80 ms` | 长按进度视觉刷新周期 |
 | `kNativeAgentSwitchHysteresis` | `8 px` | 手指微抖时保留当前候选点 |
