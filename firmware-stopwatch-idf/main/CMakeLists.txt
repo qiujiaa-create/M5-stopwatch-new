@@ -13,7 +13,6 @@ file(GLOB_RECURSE MY_SRCS
 list(FILTER MY_SRCS EXCLUDE REGEX "(^|.*/)apps/app_alarm_clock/.*")
 list(FILTER MY_SRCS EXCLUDE REGEX "(^|.*/)apps/app_stopwatch/.*")
 list(FILTER MY_SRCS EXCLUDE REGEX "(^|.*/)assets/images/alarm_icon\\.c$")
-list(FILTER MY_SRCS EXCLUDE REGEX "(^|.*/)assets/images/icon_stopwatch\\.c$")
 
 list(APPEND MY_SRCS
     "apps/app_codex/app_codex.cpp"

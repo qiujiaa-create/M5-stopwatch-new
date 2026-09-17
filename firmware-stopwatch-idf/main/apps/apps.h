@@ -14,4 +14,5 @@
 #include "app_lucky_wheel/app_lucky_wheel.h"
 #include "app_maze/app_maze.h"
 #include "app_codex/app_codex.h"
+#include "app_focus/app_focus.h"
 #include "app_xiaozhi/app_xiaozhi.h"
