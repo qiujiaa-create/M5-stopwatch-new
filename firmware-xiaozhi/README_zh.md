@@ -1,3 +1,5 @@
+> **StopWatch 集成说明 v0.2（2026-09-17 14:26）：**本文是小智上游 README，不是本整合项目的构建或刷机指南。StopWatch 适配使用 `m5stack/stopwatch` 板卡和独立的 `ota_0` 槽，分区表为 `partitions/stopwatch_dual.csv`。操作前先看[项目首页](../README.md)与[当前验收状态](../PROJECT_STATE.md)；下方上游功能列表并不代表本板卡全部可用。
+
 # An MCP-based Chatbot
 
 （中文 | [English](README.md) | [日本語](README_ja.md)）

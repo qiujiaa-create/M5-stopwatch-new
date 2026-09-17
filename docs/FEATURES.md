@@ -1,162 +1,48 @@
-# 功能说明
+# 当前功能与系统组成
 
-## 0. 产品概览
+文档版本：0.2；最后更新：2026-09-17 14:26。
 
-M5 StopWatch Codex 是面向桌面 AI 编程工作流的状态屏和语音输入控制器，主要功能包括：
+本文描述当前源码实现。安装和实机验收状态以 [PROJECT_STATE.md](../PROJECT_STATE.md) 为准。
 
-- Codex 额度圆屏页面。
-- Codex 未读任务状态和最近四小时活动热力图。
-- Codex/Pet 状态动画。
-- 顶部下拉电量状态栏。
-- BLE GATT 配置和面板 payload。
-- BLE HID fallback 按键行为。
-- macOS 菜单栏 Bridge。
-- Typeless / 微信输入法模式切换。
-- 空闲省电和降温策略。
+## 两个固件，一个 Codex App
 
-## 1. 系统组成
+| 系统 | 启动槽 | 功能 | 切换 |
+| --- | --- | --- | --- |
+| StopWatch 主固件 | `factory` | Launcher、设置、Codex 页面、BLE HID、BLE 麦克风 | Launcher 或 Setup 的小智入口检查镜像后写入启动槽并重启 |
+| 小智 v2.2.6 板卡适配 | `ota_0` | 独立的小智语音系统 | 长按 B 约 3 秒或调用小智侧 MCP 返回工具，重启到 `factory` |
 
-本项目分成两层：
+双固件分区布局见 `firmware-stopwatch-idf/partitions.csv` 与 `firmware-xiaozhi/partitions/stopwatch_dual.csv`。两边不能同时运行；切换不是 Codex 页面内的主题切换。小智板卡实现见 `firmware-xiaozhi/main/boards/m5stack/stopwatch/stopwatch.cc`。该实现和槽位存在不等于当前设备已完成小智语音对话验收。
 
-- 固件层：运行在 M5Stack StopWatch，负责圆屏 UI、宠物动画、电量状态、BLE HID、BLE GATT 配置接收、按键和 IMU 交互。
-- macOS Bridge：运行在 Mac 菜单栏，负责连接设备、读取本机 Codex 额度、检测 Typeless 状态、保存用户按键绑定，并把配置同步到固件。
+## Codex 页面
 
-账号、Cookie、token 和桌面焦点只在 Mac 上处理；设备只接收额度摘要和 HID 配置。
+主固件 Codex App 只保留 `Codex Micro` 与 `OpenWatcher V2`，通过 `Setup → Device → Codex Theme` 选择。旧 `official_v1` 等设置在加载时回退到 Codex Micro。Official V1 / Classic Pet 及其逐帧图片不再编入当前 App；旧素材和定制文档是历史参考。
 
-## 2. Codex 页面布局
+- **Codex Micro**：原生 Agent 状态、语音状态、5H 与周额度。5H 数据未知时保留等待/未知提示。
+- **OpenWatcher V2**：周额度大数字、Today 消耗、独立的 `5H` 百分比与 `RESET` 倒计时、最近四小时 24 格活动、四个 Agent 点、连接与语音状态。顶部标题表达 Codex Ready/Linking/Offline；`COMPACT SOON` 是收到上游字段后的文字提示。底部线点是视觉装饰，不是第二页指示器。
+- 两套主题共用按键和语音状态机。四个 Agent 点有触摸预览和约 480 ms 长按确认；顶部左右滑动发送原生 Encoder；中心长按后发送四向 Radial，松手归中。
 
-圆屏按 `466 x 466` AMOLED 设计：
+显示按实际 466×466 圆屏设计。V2 Agent 可见圆点已放大，透明触摸区与可见点分开。灯效状态只控制显示；是否能发送 Agent 操作取决于 Vendor HID 传输是否就绪。
 
-| Classic / Pet | OpenWatcher V2 |
-| --- | --- |
-| ![Classic Pet UI](assets/classic-pet-ui.svg) | ![OpenWatcher V2 UI](assets/openwatcher-v2-ui.svg) |
+## 三条独立链路
 
-Classic / Pet 以时间、额度弧线、Pet 动画和状态反馈为核心；OpenWatcher V2 以剩余额度、当天消耗、滚动四小时活动热力图和 Codex 未读任务为核心。
+1. **标准 BLE HID**：A/B 和摇晃对应的系统按键；Bridge 退出后已配对的基本按键仍可工作。
+2. **Codex Vendor HID**：原生 Agent、Encoder 与 Radial 事件；不以虚拟鼠标或键盘替代。
+3. **BLE Companion 与麦克风**：Bridge 接收设备状态，推送额度/活动面板，控制按需音频；音频经虚拟设备交给 macOS 应用。
 
-OpenWatcher V2 的界面方向参考了 [OpenWatcher](https://github.com/openwatcher-ai/openwatcher) 的 UI 设计思路，并针对 StopWatch 的 `466 x 466` 圆形 AMOLED、额度信息和实时语音输入流程重新设计。
+默认 A 为 `F19`，B 在录音或识别流程中临时代替 A，Ready 后恢复确认/发送。Bridge 支持 Typeless 与微信输入法的输入配置，包含绑定同步、状态观察和可选的 Typeless 启动协调。改变按键行为需同时检查两套主题及 Mac 端实际结果。
 
-- 顶部：当前时间，使用低调发光样式。
-- 下半圆连续弧线：历史已消耗底轨、08:00 后今日已消耗、当前周剩余额度。
-- 左端标签：`TODAY`，显示北京时间 08:00 统计边界后的累计消耗百分点。
-- 右端标签：`LEFT`，显示当前周剩余额度。
-- 下方居中：周额度刷新倒计时。
-- 中央：Pet 主体和状态动画，整体位置略高于圆心。
-- 顶部时钟下方：BLE、Wi-Fi 状态点。
-- 顶部下拉层：电量状态栏。向下滑显示，向上滑隐藏。
+## 额度和活动
 
-OpenWatcher V2 的活动区域包含 24 个方格，每格代表 10 分钟。时间从左向右推进，每一列按上、下两个方格依次排列；颜色由实际录音时长和录音启动频率共同决定。
+Bridge 可选读取本机 Codex 登录状态取得官方 usage 摘要，按 604800 秒周窗口与可选 18000 秒 5H 窗口分别推送。5H 缺失、过期或数值异常时显示 `--`，不换算成周额度或 0%。录音中面板推送暂存，回到空闲后再发送。Today 表示从北京时间 08:00 起的周额度百分点消耗，不是另一种官方日额度。最近四小时有 24 个 10 分钟格；可选云同步汇合多台 Mac 的统计。Wi-Fi panel fallback 在 StopWatch 主固件中默认关闭。详见 [额度说明](QUOTA.md) 与 [跨设备同步](stopwatch-cloud-sync.md)。
 
-电量策略：
+额度为被动显示，当前实现没有针对 5H 低额的声音或振动提醒。
 
-- USB 充电插入时短暂显示电量。
-- 20% 以下红色常驻。
-- 用户可以上滑隐藏 20% 低电提示；隐藏只影响当前提示，不改变电量监测。
+## 音频发送和故障策略
 
-## 3. Codex 额度获取机制
+StopWatch 麦克风按需唤醒，采集数据重采样至 16 kHz 单声道，按 20 ms 帧编码成 IMA-ADPCM，经 BLE Notify 实时传输。Bridge 解码 PCM 并固定输出到虚拟音频设备；不生成 WAV 或把录音上传到云端。虚拟设备已验证设置为 48 kHz。
 
-推荐路径是 macOS Bridge 通过 BLE 推送：
+启动前的就绪握手要求音频通知、按需采集及 Bridge 虚拟输出/路由健康。尚未就绪时设备短暂保留一次请求并显示 `MIC LINKING`；超时则中止。发送端在 NimBLE mbuf 不足时最多等待 80 ms，并为 HID、状态及订阅流量保留至少 4 个 mbuf；统计记录发送、丢帧及通知错误。Bridge 对短缺口填静音以保持时间位置，但明确断线或持续断流会中止当前听写并提示重新录制，不把缺失中段悄悄拼接成完整语音。详见 [BLE 麦克风](stopwatch-ble-microphone.md)。
 
-1. 用户在 Mac 上安装并登录 Codex。
-2. Bridge 可选读取 `~/.codex/auth.json`。
-3. Bridge 调用 `https://chatgpt.com/backend-api/wham/usage`。
-4. Bridge 只保留 604800 秒周窗口；v1.4.0 起每日统计固定为北京时间 08:00 到次日 07:59。
-5. Bridge 把周剩余额度、今日累计消耗、重置时间和状态转换成设备面板 payload。
-6. 固件通过 BLE GATT 接收 payload、缓存安全摘要并更新 Codex 页面。
+## 验收边界
 
-固件支持 Wi-Fi panel fallback，默认关闭：
-
-```text
-kDefaultWifiEnabled = false
-kDefaultWifiQuotaFallbackEnabled = false
-```
-
-如果你要启用 Wi-Fi，需要在 `firmware-stopwatch-idf/main/apps/app_codex/codex_config.h` 填入自己的 panel URL 和 Wi-Fi 信息。
-
-## 4. Claude Code 额度获取办法
-
-Claude Code 额度建议只在 macOS 端实现，不放进固件。
-
-参考方式：
-
-- 参考开源项目 `ai-limit` 的 macOS 额度监控思路。
-- 读取本机已有登录状态或本机使用记录。
-- 在 Mac 端归一化成“剩余额度、窗口重置时间、数据来源、错误状态”。
-- 只把摘要推送给 StopWatch，不把 Claude 登录凭据、Cookie、API key、原始日志写入设备。
-
-本项目内的参考文档见 [QUOTA.md](QUOTA.md)。Claude Code 的数据采集可参考 `ai-limit` 或同类 macOS 本机监控工具。
-
-## 5. Pet 建立机制
-
-Pet 不是远程图片，也不是运行时下载资源。它是编译进固件的多帧 LVGL 图片资产：
-
-- 源图或帧图放在 `docs/assets/` 或自定义工作目录。
-- 生成脚本把图片转成 `firmware-stopwatch-idf/main/assets/images/*.c`。
-- Codex view 根据状态选择帧组播放。
-
-当前状态组包括：
-
-- idle：默认呼吸/待机。
-- blink：眨眼。
-- touch：触摸反馈。
-- processing：输入或处理中。
-- msg idle/touch/shake/key/error：消息类动作和反馈。
-
-UI 里 Pet 的框和脸整体略高于圆心，眼睛、脸和双手属于同一套图形坐标，移动时应该一起移动。
-
-## 6. 更换 Pet 形象
-
-推荐流程：
-
-1. 准备统一画布尺寸和透明背景的多帧 PNG。
-2. 保持脸、眼睛、手部动作在同一坐标系统里。
-3. 用 `firmware-stopwatch-idf/tools/generate_codex_pet_assets.swift` 生成 C 资产。
-4. 确认生成文件名仍匹配 `main/CMakeLists.txt` 和 Codex view 引用。
-5. `idf.py build`，在设备上检查圆屏裁切、触摸反馈和动画节奏。
-
-更详细步骤见 [PET_CUSTOMIZATION.md](PET_CUSTOMIZATION.md)。
-
-## 7. macOS App 功能
-
-Bridge 菜单栏应用提供：
-
-- 蓝牙连接 `M5Codex-*` 设备。
-- 中文设置界面。
-- 输入模式切换：Typeless / 微信输入法。
-- A 键、B 键、摇晃动作自定义绑定。
-- 两套 UI 共用同一套按键交互：Typeless 录音、识别或异常恢复期间，B 键临时等同 A 键；回到 Ready 后才恢复确认/发送。
-- F13-F20 固定候选键保留，适合绑定不干扰正常输入的快捷键。
-- 其他键可通过用户键盘捕获生成自定义绑定。
-- 保存每个输入模式自己的绑定配置。
-- 切换模式时恢复对应绑定，并同步到固件。
-- Codex 额度推送开关和刷新间隔。
-- Codex 未读任务数量和四小时活动摘要同步。
-- 可选 Typeless 快捷键同步。
-- 开机自启动，不强制保活。
-
-## 8. Typeless 和设备状态栏
-
-Typeless 模式下，Bridge 使用 Accessibility 观察 Typeless 的录音、处理中和完成状态，再把状态同步到设备。真实输入按键通常由设备固件通过 BLE HID 发送；录音链路异常时，Bridge 只模拟一次已配置的 Typeless 快捷键来结束本次听写，已有文字由 Typeless 保留，重连后不会自动续录。
-
-设备状态栏会显示 BLE、语音、额度和错误状态。Accessibility 权限缺失时，Bridge 会进入 limited 状态，设备仍可通过 BLE HID fallback 使用基础按键。
-
-## 9. 按键绑定同步到固件
-
-用户在 App 改动绑定后，Bridge 会把配置写到设备：
-
-- input mode
-- primary key / A 键
-- confirm key / B 键
-- shake action
-- 每个键的 HID usage
-
-固件收到后保存到 NVS。这样 App 退出后，设备仍能按最后一次同步配置发送基础 BLE HID。焦点恢复、Typeless 状态识别、Codex 额度推送这些能力仍需要 App 运行。
-
-## 10. 省电机制
-
-当前固件包含分级省电，详细机制见 [POWER_SAVING.md](POWER_SAVING.md)：
-
-- 1 分钟：屏幕降到 10% 亮度，CPU 进入 80MHz 低频配置。
-- 3 分钟：关闭 Wi-Fi radio、停止振动、停止 LVGL 更新、屏幕背光归零，并让屏幕进入 activity sleep。
-- 15 分钟且未接外部电源：停止显示和无线活动后请求 PMIC 关机。
-
-Wi-Fi 默认关闭；音频输出保留，麦克风输入按需启动。空闲时虚拟输入继续输出静音，但设备停止采集、编码和 BLE 音频通知，以减少麦克风链路功耗。
+源码存在、构建成功、镜像写入和设备最终操作是四种不同证据。当前目录的主固件曾完成 factory 应用刷写与串口/BLE 启动检查；后续提交及当前两套页面的完整操作仍需复核。小智的当前启动槽、语音对话和切回操作也应单独验收。具体记录和下一步见 [PROJECT_STATE.md](../PROJECT_STATE.md)。
