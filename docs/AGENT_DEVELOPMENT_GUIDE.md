@@ -1,6 +1,6 @@
 # Agent 与二次开发指南
 
-文档版本：0.6；最后更新：2026-09-17 18:45。
+文档版本：0.9；最后更新：2026-09-18 11:44。
 
 **现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录当时的固件已刷入 factory，但后续提交及页面、输入操作仍待单独验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。小智是 ota_0 的独立固件，不是第三套 Codex 页面。
 
@@ -69,7 +69,7 @@ Mac 本机 Codex 状态
 | --- | --- | --- |
 | Codex App 控制器 | `firmware-stopwatch-idf/main/apps/app_codex/app_codex.cpp` | 汇总按键、触摸请求、BLE 状态、额度和录音状态 |
 | Codex UI | `firmware-stopwatch-idf/main/apps/app_codex/view/view.cpp`、`view.h` | 两套 UI、热力图、波形、四 Agent、推理面板、中心四向控制 |
-| Focus 本地计时 | `firmware-stopwatch-idf/main/apps/app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp` | 正计时、25 分钟倒计时、A/B 短按与暂停长按复位、圆屏 UI；不使用 Mac Bridge |
+| Focus 本地计时 | `firmware-stopwatch-idf/main/apps/app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp` | 正计时、1–60 分钟倒计时、A/B 实体键、本地 NVS 时长与铃声设置、圆屏 UI；不使用 Mac Bridge |
 | Codex 配置 | `firmware-stopwatch-idf/main/apps/app_codex/codex_config.h` | 示例 URL、刷新周期、Wi-Fi 占位符和输入默认值 |
 | 面板解析 | `firmware-stopwatch-idf/main/apps/app_codex/codex_quota_client.cpp` | 接收 Bridge/HTTP 面板，解析额度、活动和推理标签 |
 | BLE Companion | `firmware-stopwatch-idf/main/hal/ble_bridge.cpp`、`ble_bridge.h` | 配对、标准按键、Bridge 状态、面板分片和 task 摘要 |
@@ -111,7 +111,7 @@ Mac 本机 Codex 状态
 
 Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。修改输入逻辑时必须同时验证 Codex Micro 和 OpenWatcher V2，因为两套 UI 共用同一交互状态机。
 
-Launcher 的独立 Focus 应用使用 A/B 做本地计时：短按开始、暂停或继续；对应计时处于 `PAUSED` 时长按约 500 ms 复位。这里没有双击结束动作，A+B 长按仍返回 Launcher。Focus 不改变上表所述 Codex App 与 Mac 的输入链路。页面及计时持久性见 [Focus 使用说明](FOCUS.md)。
+Launcher 的独立 Focus 应用使用 A/B 做本地计时：当前模式按另一键只切换页面，进入目标页面后再按对应键才开始、暂停或继续；对应计时处于 `PAUSED` 时长按约 500 ms 复位。这里没有双击结束动作，A+B 长按仍返回 Launcher。倒计时分钟数字打开 1–60 分钟设置页；下方只有带小喇叭图标的铃声点击按钮，B 的计时控制保留在实体键上。倒计时模式及其设置页右上角整块弧形半圆填充为 `#46D1E0`。开启铃声后，倒计时归零以最大提示音幅度播放约 4 秒。Focus 不改变上表所述 Codex App 与 Mac 的输入链路。页面及计时持久性见 [Focus 使用说明](FOCUS.md)。
 
 ### 4.2 四个 Agent 点
 
@@ -275,7 +275,7 @@ UI 支持 solid、breath、shallow breath 等宿主效果。Agent 点的触摸�
 | 中心手势死区/方向 | `kActionWheel*`、`kNativeControl*` | 标准键盘 HID |
 | Agent 协议 | `codex_micro_hid.cpp` | Companion characteristic UUID |
 | A/B 语音交互 | `app_codex.cpp` + Bridge 状态机 | 两套 UI 分别写不同逻辑 |
-| Focus 计时或页面 | `app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp` | Codex A/B 语音、BLE HID、Bridge |
+| Focus 计时或页面 | `app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp`；NVS namespace `focus`，键 `minutes` / `ring` | Codex A/B 语音、BLE HID、Bridge、其他 NVS namespace |
 | 波形刷新或 UI 功耗 | `CodexView::frameIntervalMs()` 和差分刷新 | BLE connection interval |
 | 音频格式/帧长 | `ble_microphone.cpp`、`ima_adpcm.*`、Bridge 解码 | 只改一端 |
 | Mac 虚拟音频路由/静音 | `stopwatch_microphone.swift` + Bridge 录音预检 | BLE 格式、系统默认扬声器、配对与 HID |
