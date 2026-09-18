@@ -5,6 +5,8 @@ int main()
 {
     focus::FocusTimer timer;
     constexpr uint64_t minute = 60ULL * 1000;
+    assert(timer.countdownMinutes() == 25);
+    assert(!timer.ringEnabled());
     assert(timer.countdownRemainingMs(0) == 25 * minute);
     assert(timer.countUpElapsedMs(0) == 0);
 
@@ -60,4 +62,25 @@ int main()
     assert(timer.countUpState() == focus::TimerState::Paused);
     timer.clickCountUp(3'202'000);
     assert(timer.countdownState() == focus::TimerState::Paused);
+
+    // A saved duration replaces the current countdown and is used by reset and restart.
+    assert(!timer.configureCountdownMinutes(0));
+    assert(!timer.configureCountdownMinutes(61));
+    assert(timer.countdownMinutes() == 25);
+    assert(timer.configureCountdownMinutes(1));
+    assert(timer.countdownState() == focus::TimerState::Ready);
+    assert(timer.countdownRemainingMs(3'202'000) == minute);
+    timer.clickCountdown(4'000'000);
+    assert(timer.countdownRemainingMs(4'030'000) == 30'000);
+    assert(timer.configureCountdownMinutes(60));
+    assert(timer.countdownState() == focus::TimerState::Ready);
+    assert(timer.countdownRemainingMs(4'030'000) == 60 * minute);
+    timer.clickCountdown(5'000'000);
+    timer.clickCountdown(5'001'000);
+    timer.resetCountdown();
+    assert(timer.countdownRemainingMs(5'002'000) == 60 * minute);
+    timer.setRingEnabled(true);
+    assert(timer.ringEnabled());
+    timer.setRingEnabled(false);
+    assert(!timer.ringEnabled());
 }

@@ -9,7 +9,22 @@ enum class Mode : uint8_t { CountUp, Countdown };
 
 class FocusTimer {
 public:
-    static constexpr uint64_t CountdownDurationMs = 25ULL * 60 * 1000;
+    static constexpr int DefaultCountdownMinutes = 25;
+    static constexpr int MinCountdownMinutes = 1;
+    static constexpr int MaxCountdownMinutes = 60;
+
+    bool configureCountdownMinutes(int minutes)
+    {
+        if (minutes < MinCountdownMinutes || minutes > MaxCountdownMinutes) return false;
+        _countdownMinutes = minutes;
+        _countdownRemainingMs = static_cast<uint64_t>(minutes) * 60 * 1000;
+        _countdownState = TimerState::Ready;
+        return true;
+    }
+
+    int countdownMinutes() const { return _countdownMinutes; }
+    bool ringEnabled() const { return _ringEnabled; }
+    void setRingEnabled(bool enabled) { _ringEnabled = enabled; }
 
     void clickCountUp(uint64_t nowMs)
     {
@@ -49,7 +64,7 @@ public:
             pauseCountUp(nowMs);
         }
         if (_countdownState == TimerState::Ready || _countdownState == TimerState::Completed) {
-            _countdownRemainingMs = CountdownDurationMs;
+            _countdownRemainingMs = countdownDurationMs();
         }
         _countdownStartedAtMs = nowMs;
         _countdownState = TimerState::Running;
@@ -60,7 +75,7 @@ public:
         if (_countdownState != TimerState::Paused) return;
         _selected = Mode::Countdown;
         _countdownState = TimerState::Ready;
-        _countdownRemainingMs = CountdownDurationMs;
+        _countdownRemainingMs = countdownDurationMs();
     }
 
     // Returns true only for the transition to zero, including when the app is closed.
@@ -98,6 +113,11 @@ public:
     void selectMode(Mode mode) { _selected = mode; }
 
 private:
+    uint64_t countdownDurationMs() const
+    {
+        return static_cast<uint64_t>(_countdownMinutes) * 60 * 1000;
+    }
+
     void pauseCountUp(uint64_t nowMs)
     {
         _countUpAccumulatedMs += nowMs - _countUpStartedAtMs;
@@ -115,11 +135,15 @@ private:
     Mode _selected = Mode::CountUp;
     uint64_t _countUpAccumulatedMs = 0;
     uint64_t _countUpStartedAtMs = 0;
-    uint64_t _countdownRemainingMs = CountdownDurationMs;
+    int _countdownMinutes = DefaultCountdownMinutes;
+    bool _ringEnabled = false;
+    uint64_t _countdownRemainingMs = DefaultCountdownMinutes * 60ULL * 1000;
     uint64_t _countdownStartedAtMs = 0;
 };
 
 FocusTimer& timer();
+void saveCountdownMinutes(int minutes);
+void saveRingEnabled(bool enabled);
 void pollBackground(uint64_t nowMs);
 
 }  // namespace focus
