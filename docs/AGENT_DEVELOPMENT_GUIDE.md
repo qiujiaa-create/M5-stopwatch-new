@@ -1,6 +1,6 @@
 # Agent 与二次开发指南
 
-文档版本：0.9；最后更新：2026-09-18 11:44。
+文档版本：1.0；最后更新：2026-09-18 13:30。
 
 **现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录当时的固件已刷入 factory，但后续提交及页面、输入操作仍待单独验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。小智是 ota_0 的独立固件，不是第三套 Codex 页面。
 
@@ -26,9 +26,9 @@
 
 - A 开始语音，A 或 B 在识别流程中停止；只有回到 Ready 后 B 才恢复确认/发送。
 - StopWatch 麦克风以 IMA-ADPCM 实时传到 Mac，不生成 WAV。
-- 四个 Agent 点完成触碰预览、480ms 长按确认和 Codex 端槽位切换。
+- 四个 Agent 点完成触碰预览、280ms 长按确认和 Codex 端槽位切换；Working 点在任务执行期间闪动并保持屏幕不自动息屏。
 - 顶部左右滑动可以改变推理等级。
-- 中心长按后可发送四向 Radial 事件。
+- 中心长按 280ms 后可发送四向 Radial 事件。
 - BLE 重新配对后，Bridge、虚拟麦克风和 Codex Vendor HID 可以同时工作。
 - Bridge 必须等待 macOS 原生 IOHID 设备出现后再连接自定义服务；不要移除这一配对时序保护。
 - 不要在 `BLE_GAP_EVENT_REPEAT_PAIRING` 回调中自动删除 peer；NimBLE 会先删除安全密钥再删除 CCCD，后一步失败会留下下次启动无法恢复的半删除 bond。
@@ -121,14 +121,14 @@ Launcher 的独立 Focus 应用使用 A/B 做本地计时：当前模式按另�
 | --- | --- | --- |
 | `kNativeAgentCenters` | `(99,367)`、`(184,417)`、`(282,417)`、`(367,367)` | 四个可见点中心，适配 466×466 圆屏 |
 | `kNativeAgentHitSize` | `84 px` | 每个点的透明方形触摸区；V2 可见圆点现按 2 倍缩放 |
-| `kNativeAgentHoldMs` | `480 ms` | 从预览到真正提交的时间 |
+| `kNativeAgentHoldMs` | `280 ms` | 从预览到真正提交的时间 |
 | `kNativeAgentPreviewFrameMs` | `80 ms` | 长按进度视觉刷新周期 |
 | `kNativeAgentSwitchHysteresis` | `8 px` | 手指微抖时保留当前候选点 |
 
 交互顺序：
 
 1. 手指按下，轻振 `14 ms / 35%`，圆点开始放大。
-2. 在 480ms 内松手，不发送任何 Agent 事件。
+2. 在 280ms 内松手，不发送任何 Agent 事件。
 3. 保持到阈值，强振 `35 ms / 75%`，向传输层排队槽位。
 4. `tap_agent_slot()` 发送一次按下和一次释放，间隔 24ms。
 
@@ -161,7 +161,7 @@ Codex Micro 宿主的旋钮模式须设为 `reasoning`，顶部滑动发送的 E
 | 参数 | 当前值 | 含义 |
 | --- | --- | --- |
 | `kActionWheelStartRadius` | `72 px` | 中心可开始长按的半径 |
-| `kActionWheelHoldMs` | `480 ms` | 进入四向模式的长按时间 |
+| `kActionWheelHoldMs` | `280 ms` | 进入四向模式的长按时间 |
 | `kNativeControlHoldSlop` | `22 px` | 长按确认前允许的移动 |
 | `kNativeControlDeadZone` | `24 px` | 进入方向输出的死区 |
 | `kNativeControlFullScale` | `120 px` | Radial 距离达到 1.0 的参考位移 |

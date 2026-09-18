@@ -112,6 +112,7 @@ public:
     bool consumeNativeRadialRequest(float& angle, float& distance);
     uint32_t frameIntervalMs() const;
     bool codexLiveActive() const;
+    bool hasExecutingNativeAgent() const;
 
 private:
     std::unique_ptr<uitk::lvgl_cpp::Container> _panel;
