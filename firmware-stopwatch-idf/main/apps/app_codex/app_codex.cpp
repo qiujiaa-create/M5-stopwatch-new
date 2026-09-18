@@ -113,6 +113,12 @@ void AppCodex::onRunning()
     handleBluetoothKeys();
     pollPendingVoiceStart(GetHAL().millis());
     handleTouchControls();
+    if (_view && _view->hasExecutingNativeAgent()) {
+        // Keep the activity timer alive for the duration of a native Codex task.
+        // This prevents dim, light sleep, and automatic power-off while the
+        // V2 working dot is reporting an executing Agent.
+        GetHAL().markActivity();
+    }
     const uint32_t now = GetHAL().millis();
     if (ble_bridge::consume_voice_start_timeout()) {
         if (ble_bridge::is_typeless_input_mode()) {

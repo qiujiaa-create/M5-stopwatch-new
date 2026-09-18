@@ -43,16 +43,18 @@ constexpr uint32_t kMicroWarning    = 0xFFB44A;
 constexpr uint32_t kMicroDanger     = 0xFF5D6C;
 constexpr uint32_t kMicroSession    = 0x4292F5;
 constexpr uint32_t kMicroWeeklyText = 0x5FD8C0;
-constexpr uint32_t kActionWheelHoldMs = 480;
+constexpr uint32_t kActionWheelHoldMs = 280;
 constexpr uint32_t kActionWheelFrameMs = 33;
 constexpr int kActionWheelStartRadius = 72;
 constexpr int kNativeControlHoldSlop = 22;
 constexpr int kNativeControlDeadZone = 24;
 constexpr int kNativeControlFullScale = 120;
 constexpr uint32_t kNativeRadialFrameMs = 50;
-constexpr uint32_t kNativeAgentHoldMs = 480;
+constexpr uint32_t kNativeAgentHoldMs = 280;
 constexpr uint32_t kNativeAgentPreviewFrameMs = 80;
+constexpr uint32_t kNativeAgentAnimationFrameMs = 80;
 constexpr int kNativeAgentSwitchHysteresis = 8;
+constexpr uint32_t kNativeWorkingColor = 0x304FFE;
 // "CODEX LIVE" decays this long after the last quota panel arrived from the
 // bridge (the bridge refreshes quota every 300 s; a closed Codex client stops
 // panel pushes, so this timeout is what downgrades LIVE to BLE ONLY).
@@ -704,6 +706,21 @@ uint32_t CodexView::frameIntervalMs() const
         return 100;
     }
     return 100;
+}
+
+bool CodexView::hasExecutingNativeAgent() const
+{
+    if (_theme_mode != ThemeMode::OpenWatcherV2 || !_native_agents_ready) {
+        return false;
+    }
+    const size_t visible_slots = std::min(kNativeAgentCenters.size(), _native_agents.size());
+    for (size_t index = 0; index < visible_slots; ++index) {
+        const auto& agent = _native_agents[index];
+        if (agent.assigned && agent.color == kNativeWorkingColor && agent.brightness > 0.01f) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool CodexView::consumeClearInputRequest()
@@ -1941,11 +1958,12 @@ void CodexView::updateNativeAgentRail(bool force)
     const uint32_t now = GetHAL().millis();
     bool has_animation = false;
     for (const auto& agent : _native_agents) {
-        has_animation = has_animation ||
-                        (_native_agents_ready && agent.assigned &&
-                         (agent.effect == 4 || agent.effect == 6));
+        const bool active = _native_agents_ready && agent.assigned;
+        const bool working = active && agent.color == kNativeWorkingColor;
+        has_animation = has_animation || working ||
+                        (active && (agent.effect == 4 || agent.effect == 6));
     }
-    if (!force && (!has_animation || now - _last_native_agent_anim_tick < 250)) {
+    if (!force && (!has_animation || now - _last_native_agent_anim_tick < kNativeAgentAnimationFrameMs)) {
         return;
     }
     _last_native_agent_anim_tick = now;
@@ -1956,6 +1974,7 @@ void CodexView::updateNativeAgentRail(bool force)
         }
         const auto& agent = _native_agents[index];
         const bool active = _native_agents_ready && agent.assigned;
+        const bool working = active && agent.color == kNativeWorkingColor;
         const bool preview = _native_agent_touch_tracking &&
                              _native_agent_touch_candidate == static_cast<int>(index);
         uint32_t color = active && agent.color != 0 ? agent.color : kOwTrack;
@@ -1963,12 +1982,12 @@ void CodexView::updateNativeAgentRail(bool force)
         int opacity = active
                           ? static_cast<int>(std::lround(175.0f + 80.0f * clamp01(agent.brightness)))
                           : 72;
-        if (active && (agent.effect == 4 || agent.effect == 6)) {
+        if (working || (active && (agent.effect == 4 || agent.effect == 6))) {
             const float period_ms = 2800.0f - 1600.0f * clamp01(agent.speed);
             const float phase = static_cast<float>(now % static_cast<uint32_t>(period_ms)) /
                                 period_ms;
             const float pulse = 0.5f + 0.5f * std::sin(phase * 6.28318530718f);
-            if (agent.effect == 4) {
+            if (working || agent.effect == 4) {
                 size = (13 + static_cast<int>(std::lround(4.0f * pulse))) *
                        kNativeAgentDotScale;
                 opacity = 120 + static_cast<int>(std::lround(135.0f * pulse));
