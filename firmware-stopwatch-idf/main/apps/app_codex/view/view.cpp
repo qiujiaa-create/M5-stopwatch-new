@@ -429,6 +429,9 @@ void CodexView::applyQuota(int weeklyLeftPct,
 void CodexView::applySnapshot(const codex::QuotaSnapshot& snapshot)
 {
     const int previous_week_pct = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
+    const int previous_session_pct = _state.session5hLeftPct;
+    const bool previous_stale = _state.stale;
+    const bool previous_quota_valid = _state.quotaValid;
     const auto previous_activity_buckets = _state.activityBuckets;
 
     _state.wifiConnected = snapshot.wifiConnected;
@@ -474,6 +477,9 @@ void CodexView::applySnapshot(const codex::QuotaSnapshot& snapshot)
 
     const int updated_week_pct = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
     const bool v2_canvas_changed = previous_week_pct != updated_week_pct ||
+                                   previous_session_pct != _state.session5hLeftPct ||
+                                   previous_stale != _state.stale ||
+                                   previous_quota_valid != _state.quotaValid ||
                                    previous_activity_buckets != _state.activityBuckets;
 
     updateConnectionDots();
@@ -2246,14 +2252,14 @@ void CodexView::drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords)
     };
 
     draw_line(50, 181, 122, 181, kOwToday, 1, 230);
-    draw_line(122, 181, 147, 205, kOwToday, 1, 230);
-    draw_line(147, 205, 168, 205, kOwToday, 1, 230);
+    draw_line(122, 181, 147, 157, kOwToday, 1, 230);
+    draw_line(147, 157, 168, 157, kOwToday, 1, 230);
 
     lv_area_t today_dot = {
         static_cast<lv_coord_t>(coords.x1 + 165),
-        static_cast<lv_coord_t>(coords.y1 + 202),
+        static_cast<lv_coord_t>(coords.y1 + 154),
         static_cast<lv_coord_t>(coords.x1 + 171),
-        static_cast<lv_coord_t>(coords.y1 + 208),
+        static_cast<lv_coord_t>(coords.y1 + 160),
     };
     rect.radius = LV_RADIUS_CIRCLE;
     rect.bg_color = lv_color_hex(kOwToday);
@@ -2273,7 +2279,52 @@ void CodexView::drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords)
         draw_line(232, y, 241, y, 0x596CFF, 2, 245);
         draw_line(246, y, 255, y, 0x596CFF, 2, 245);
     };
-    draw_divider(222, false);
+    // 5h remaining quota. Keep a visible track for missing/stale data, but do
+    // not infer a value from the weekly window. The filled portion uses many
+    // short overlapping strokes so its semantic red-to-green color transition
+    // stays visually smooth on the round AMOLED.
+    constexpr int kSessionBarLeft = 44;
+    constexpr int kSessionBarRight = 422;
+    constexpr int kSessionBarY = 222;
+    constexpr int kSessionBarWidth = kSessionBarRight - kSessionBarLeft;
+    constexpr int kSessionBarSegments = 96;
+    draw_line(kSessionBarLeft,
+              kSessionBarY,
+              kSessionBarRight,
+              kSessionBarY,
+              kOwTrack,
+              8,
+              220);
+    const bool session_valid = _state.quotaValid && !_state.stale &&
+                               _state.session5hLeftPct >= 0;
+    if (session_valid) {
+        const float remaining = static_cast<float>(
+                                    std::clamp(_state.session5hLeftPct, 0, 100)) /
+                                100.0f;
+        const int filled_width = static_cast<int>(
+            std::lround(static_cast<float>(kSessionBarWidth) * remaining));
+        for (int segment = 0; segment < kSessionBarSegments; ++segment) {
+            const int segment_x1 = kSessionBarLeft +
+                                   (kSessionBarWidth * segment) / kSessionBarSegments;
+            if (segment_x1 >= kSessionBarLeft + filled_width) {
+                break;
+            }
+            const int segment_x2 = std::min(
+                kSessionBarLeft + filled_width,
+                kSessionBarLeft +
+                    (kSessionBarWidth * (segment + 1)) / kSessionBarSegments);
+            const float midpoint = static_cast<float>(
+                                       segment_x1 + segment_x2 - 2 * kSessionBarLeft) /
+                                   (2.0f * static_cast<float>(kSessionBarWidth));
+            draw_line(segment_x1,
+                      kSessionBarY,
+                      segment_x2,
+                      kSessionBarY,
+                      quota_semantic_color(midpoint),
+                      8,
+                      255);
+        }
+    }
     draw_divider(340, false);
 
     constexpr int kCells = 24;

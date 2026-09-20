@@ -1,6 +1,6 @@
 # 当前功能与系统组成
 
-文档版本：0.7；最后更新：2026-09-18 13:30。
+文档版本：0.9；最后更新：2026-09-20 09:47。
 
 本文描述当前源码实现。安装和实机验收状态以 [PROJECT_STATE.md](../PROJECT_STATE.md) 为准。
 
@@ -18,7 +18,7 @@
 主固件 Codex App 只保留 `Codex Micro` 与 `OpenWatcher V2`，通过 `Setup → Device → Codex Theme` 选择。旧 `official_v1` 等设置在加载时回退到 Codex Micro。Official V1 / Classic Pet 及其逐帧图片不再编入当前 App；旧素材和定制文档是历史参考。
 
 - **Codex Micro**：原生 Agent 状态、语音状态、5H 与周额度。5H 数据未知时保留等待/未知提示。
-- **OpenWatcher V2**：周额度大数字、Today 消耗、独立的 `5H` 百分比与 `RESET` 倒计时、最近四小时 24 格活动、四个 Agent 点、连接与语音状态。顶部标题表达 Codex Ready/Linking/Offline；`COMPACT SOON` 是收到上游字段后的文字提示。底部线点是视觉装饰，不是第二页指示器。
+- **OpenWatcher V2**：周额度大数字、Today 消耗、独立的 `5H` 百分比与 `RESET` 倒计时；5H 文字上方的横向进度条按剩余百分比填充，并从低额红色平滑过渡到高额绿色。Today 的引导折线向上指向周额度剩余数字，明确 Today 表示全周额度的当日消耗比例。页面同时显示最近四小时 24 格活动、四个 Agent 点、连接与语音状态。顶部标题表达 Codex Ready/Linking/Offline；`COMPACT SOON` 是收到上游字段后的文字提示。底部线点是视觉装饰，不是第二页指示器。
 - 两套主题共用按键和语音状态机。四个 Agent 点有触摸预览和 280 ms 长按确认；Working 状态的小圆点持续闪动，任务执行期间暂时阻止自动变暗、息屏和关机；顶部左右滑动发送原生 Encoder；中心长按 280 ms 后发送四向 Radial，松手归中。
 
 显示按实际 466×466 圆屏设计。V2 Agent 可见圆点已放大，透明触摸区与可见点分开。灯效状态只控制显示；是否能发送 Agent 操作取决于 Vendor HID 传输是否就绪。
