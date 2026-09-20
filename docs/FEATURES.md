@@ -1,6 +1,6 @@
 # 当前功能与系统组成
 
-文档版本：0.9；最后更新：2026-09-20 09:47。
+文档版本：1.0；最后更新：2026-09-20 15:38。
 
 本文描述当前源码实现。安装和实机验收状态以 [PROJECT_STATE.md](../PROJECT_STATE.md) 为准。
 
@@ -12,6 +12,14 @@
 | 小智 v2.2.6 板卡适配 | `ota_0` | 独立的小智语音系统 | 长按 B 约 3 秒或调用小智侧 MCP 返回工具，重启到 `factory` |
 
 双固件分区布局见 `firmware-stopwatch-idf/partitions.csv` 与 `firmware-xiaozhi/partitions/stopwatch_dual.csv`。两边不能同时运行；切换不是 Codex 页面内的主题切换。小智板卡实现见 `firmware-xiaozhi/main/boards/m5stack/stopwatch/stopwatch.cc`。该实现和槽位存在不等于当前设备已完成小智语音对话验收。
+
+## Launcher 长按快捷启动
+
+StopWatch 主固件的 Launcher 首页保留 A/B 短按左右切换图标，并增加独立的 1 秒长按快捷启动：默认长按 A 打开小智切换确认页，默认长按 B 打开 Focus。小智仍由原确认页检查 `ota_0` 镜像并等待用户确认，长按 A 本身不会写启动槽或重启。
+
+在 `Settings → Device → Quick Launch` 中可分别设置 `Hold A` 与 `Hold B`。可选目标为 Disabled、Codex、Focus、Xiaozhi、Watch Face、Lucky Wheel、Maze 和 Settings；两个按键允许选择相同目标。设置保存在 `launcher` NVS 命名空间，关机后继续有效。未知或已经移除的持久化目标按 Disabled 处理，不能因 APP 安装顺序变化而打开错误程序。
+
+A+B 组合操作优先于单键长按：单键按满 1 秒后锁定目标并按设置提供触觉反馈，松手后才打开 APP，避免仍按住的按键被目标 APP 继续处理；如果松手前形成 A+B，则取消本次单键快捷启动。两个按键完全松开后才接受下一次快捷启动。单键长按只执行一次，松手不会再产生短按翻页。
 
 ## Codex 页面
 
@@ -51,4 +59,4 @@ StopWatch 麦克风按需唤醒，采集数据重采样至 16 kHz 单声道，�
 
 ## 验收边界
 
-源码存在、构建成功、镜像写入和设备最终操作是四种不同证据。当前目录的主固件曾完成 factory 应用刷写与串口/BLE 启动检查；后续提交及当前两套页面的完整操作仍需复核。小智的当前启动槽、语音对话和切回操作也应单独验收。具体记录和下一步见 [PROJECT_STATE.md](../PROJECT_STATE.md)。
+源码存在、构建成功、镜像写入和设备最终操作是四种不同证据。Launcher 长按快捷启动已通过主机手势测试、ESP-IDF v5.5.4 构建并写入 factory；设置页圆屏布局、A/B 实际长按、短按不回归、配置重启保留及小智确认页仍需实机验证。当前目录的主固件已完成本次 factory 应用刷写与写后校验；后续提交及当前两套页面的完整操作仍需复核。小智的当前启动槽、语音对话和切回操作也应单独验收。具体记录和下一步见 [PROJECT_STATE.md](../PROJECT_STATE.md)。

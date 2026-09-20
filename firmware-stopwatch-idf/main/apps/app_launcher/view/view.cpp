@@ -365,10 +365,10 @@ void LauncherView::init(std::vector<mooncake::AppProps_t> appPorps)
     GetHAL().bootLogo.reset();
 }
 
-void LauncherView::update()
+void LauncherView::update(bool updateButtonStates)
 {
     if (_key_manager) {
-        switch (_key_manager->update()) {
+        switch (_key_manager->update(updateButtonStates)) {
             case input::KeyEvent::GoPrevious:
                 scroll_to_nearby_icon(-1);
                 break;

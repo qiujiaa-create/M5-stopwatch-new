@@ -1,6 +1,6 @@
 # M5 StopWatch：Codex 控制器、Focus 计时与小智双固件
 
-文档版本：0.9；最后更新：2026-09-20 09:47。
+文档版本：1.0；最后更新：2026-09-20 15:38。
 
 当前源码版本：**固件 v0.10.7 / macOS Bridge v1.4.1**。版本号是源码元数据，具体设备安装版本以实机验证为准。
 
@@ -21,6 +21,8 @@
 这是一台设备上的两个可启动系统。小智通过切换启动槽进入，不与 Codex 页面同时运行。主固件中，Codex Micro 和 OpenWatcher V2 是 **同一个 Codex App 的两套主题**，可在 `Setup → Device → Codex Theme` 选择。Official V1 / Classic Pet 及其逐帧动画已从当前主固件移除；旧主题设置回退到 Codex Micro。
 
 主固件的 Launcher/Setup 提供“切换到小智”确认页，检查 `ota_0` 有可启动镜像后才切换并重启。小智侧可长按 B 约 3 秒，或使用其返回 StopWatch 的 MCP 工具，切回 `factory`。当前硬件上安装的槽位及小智语音对话效果需按 [项目状态](PROJECT_STATE.md) 单独复核。双固件使用相同分区布局；`factory` 为 6 MiB，`ota_0` 为 3 MiB，`storage` 为 4 MiB。刷写前以两侧分区 CSV 和设备实际分区表为准。
+
+Launcher 首页支持 1 秒长按快捷启动：首次使用时 A 进入小智确认页，B 进入 Focus；按满 1 秒后松手打开，A/B 短按仍用于左右切换图标。可在 `Settings → Device → Quick Launch` 分别选择两个长按目标或关闭快捷键，保存后关机不丢失。选择小智只会打开既有确认页，不会绕过确认直接切换启动槽。操作和验收边界见 [功能说明](docs/FEATURES.md)。
 
 ## Codex 页面和输入
 

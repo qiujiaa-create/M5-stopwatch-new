@@ -1,6 +1,6 @@
 # M5 StopWatch 当前状态
 
-文档版本：1.9；最后更新：2026-09-20 09:53。
+文档版本：2.1；最后更新：2026-09-20 15:49。
 
 ## 本目录是什么
 
@@ -40,6 +40,7 @@ Git 版本不包含 ChatGPT.app、Typeless.app、已安装的音频驱动、登�
 - **2026-09-18 V2 中心 Radial 长按调整已刷入**：中心四向 Radial 进入阈值由 480ms 改为 280ms，方向映射、连续事件和松手归中逻辑不变。镜像 4,116,352 字节，SHA-256 `79e6c41ee47159b2ac76d8b283874bc0a8b859f7e002853d327b43a8f078a7ec`，已通过 `/dev/cu.usbmodem21201` 的 `app-flash` 写入 factory 应用偏移 `0x20000`，写后 hash 校验通过并自动硬复位一次；中心长按行为仍待实机确认。
 - **2026-09-20 V2 5H 进度条已刷入**：OpenWatcher V2 在 `5H` / `RESET` 文字上方增加横向剩余额度进度条，填充长度按 5H 剩余百分比变化，颜色从低额红色平滑过渡到高额绿色。缺失、过期或异常数据只显示暗色轨道，继续保留 `--`，不借用周额度。ESP-IDF v5.5.4 全量构建和版本检查通过；factory 应用镜像 4,116,656 字节，SHA-256 `770c92c102acdbbd631802fe1faedeb9a94ddaf5574f00d7f3c57b5c0b43fa41`。刷写前确认设备为 ESP32-S3、factory 为 6 MiB 且 `otadata` 为擦除态；随后通过 `/dev/cu.usbmodem21201` 的 `app-flash` 只写入 `factory @ 0x20000`，写后 hash 和独立 `verify_flash` 均匹配，并完成硬复位。实机显示与 5H 动态刷新仍待确认。
 - **2026-09-20 V2 TODAY 引导线已刷入**：TODAY 区域右侧折线由向下改为向上，终点指向周额度剩余数字的下沿，避免与 5H 进度条产生语义混淆。仅调整静态画布几何，数据、进度条和交互链路不变。ESP-IDF v5.5.4 增量构建、版本检查和差异检查通过；factory 镜像 4,116,656 字节，SHA-256 `77c94539582386cc24096e89bafc2f6c80c7c8034a15a6eb2467895351d8b727`。已通过 `/dev/cu.usbmodem21201` 的 `app-flash` 只写入 `factory @ 0x20000`，写后 hash 和独立 `verify_flash` 均匹配，并完成硬复位；实机显示仍待确认。
+- **2026-09-20 Launcher 长按快捷启动已刷入**：Launcher 首页保留 A/B 短按左右导航，增加 1 秒单键长按快捷启动；默认 A 打开小智确认入口，默认 B 打开 Focus。`Settings → Device → Quick Launch` 可分别选择目标或 Disabled，并通过 NVS 保存稳定目标字符串。达到阈值后松手才打开目标，避免按住状态传入新 APP；松手前形成 A+B 会取消单键目标。主机手势测试、Focus 回归测试、ESP-IDF v5.5.4 构建、版本检查和差异检查通过；factory 镜像 4,121,712 字节，SHA-256 `edbeb52ce0a9830ce02a1511f13dae92b85ca4f976f6c637dabd7023164fe9e2`。2026-09-20 通过 `/dev/cu.usbmodem21201` 的 `app-flash` 写入 `factory @ 0x20000`，写后 digest 与独立 `verify_flash` 均匹配；写后分区表和 otadata 未变化。设置页圆屏布局、实体按键时序、重启后配置保留和小智二次确认仍待实机验收。
 - **待实机操作验证**：确认设置只列出两套主题、当前 Codex 页面能正常打开；再回归 V2 的 A/B 语音、四 Agent、推理滑动与四向 Radial。串口启动成功不代替这些操作结果。小智固件未在本次迁移中构建。
 - **容量边界**：缩小的是 factory 应用镜像，在 6 MiB factory 分区内增加约 1.79 MiB 余量；4 MiB FAT `storage` 分区容量未变化。
 - **小智**：独立启动槽，不是 Codex 页面。factory 的 Launcher/Setup 提供切到 ota_0 的确认入口，并先检查目标镜像；小智板卡实现提供 B 键长按 3 秒或 MCP 工具切回 factory。当前设备槽位及小智语音对话仍需单独复核。

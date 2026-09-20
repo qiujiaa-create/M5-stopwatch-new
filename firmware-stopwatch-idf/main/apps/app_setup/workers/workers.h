@@ -115,6 +115,18 @@ private:
     Hal::ButtonConfig _applied_config;
 };
 
+class QuickLaunchWorker : public WorkerBase {
+public:
+    QuickLaunchWorker();
+    ~QuickLaunchWorker();
+    void update() override;
+
+private:
+    class QuickLaunchView;
+
+    std::unique_ptr<QuickLaunchView> _view;
+};
+
 /**
  * @brief
  *

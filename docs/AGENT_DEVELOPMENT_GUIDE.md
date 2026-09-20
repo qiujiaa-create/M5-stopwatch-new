@@ -1,6 +1,6 @@
 # Agent 与二次开发指南
 
-文档版本：1.2；最后更新：2026-09-20 09:47。
+文档版本：1.3；最后更新：2026-09-20 15:38。
 
 **现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录当时的固件已刷入 factory，但后续提交及页面、输入操作仍待单独验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。小智是 ota_0 的独立固件，不是第三套 Codex 页面。
 
@@ -110,6 +110,8 @@ Mac 本机 Codex 状态
 | A+B | 退出 Codex App | 回到设备 Launcher |
 
 Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。修改输入逻辑时必须同时验证 Codex Micro 和 OpenWatcher V2，因为两套 UI 共用同一交互状态机。
+
+Launcher 首页单独提供 1 秒长按快捷启动，默认 A 打开 Xiaozhi 确认入口、B 打开 Focus；短按 A/B 仍为上一个/下一个图标。目标可在 `Settings → Device → Quick Launch` 中分别设置，NVS namespace 为 `launcher`，键为 `hold_a` / `hold_b`。目标保存稳定字符串而不是运行时 app ID，解析失败时禁用。达到阈值时只锁定目标，必须松手后再打开 APP，避免物理按住状态被新 APP 继承；松手前形成 A+B 会取消单键目标。该逻辑位于 `apps/common/launcher_shortcuts/` 和 `app_launcher`，不得扩散到 Codex/Focus 内部的 A/B 状态机。小智目标只打开 `AppXiaozhi` 的现有确认页，不直接切换 `ota_0`。
 
 Launcher 的独立 Focus 应用使用 A/B 做本地计时：当前模式按另一键只切换页面，进入目标页面后再按对应键才开始、暂停或继续；对应计时处于 `PAUSED` 时长按约 500 ms 复位。这里没有双击结束动作，A+B 长按仍返回 Launcher。倒计时分钟数字打开 1–60 分钟设置页；下方只有带小喇叭图标的铃声点击按钮，B 的计时控制保留在实体键上。倒计时模式及其设置页右上角整块弧形半圆填充为 `#46D1E0`。开启铃声后，倒计时归零以最大提示音幅度播放约 4 秒。Focus 不改变上表所述 Codex App 与 Mac 的输入链路。页面及计时持久性见 [Focus 使用说明](FOCUS.md)。
 
@@ -276,6 +278,7 @@ UI 支持 solid、breath、shallow breath 等宿主效果。Agent 点的触摸�
 | 中心手势死区/方向 | `kActionWheel*`、`kNativeControl*` | 标准键盘 HID |
 | Agent 协议 | `codex_micro_hid.cpp` | Companion characteristic UUID |
 | A/B 语音交互 | `app_codex.cpp` + Bridge 状态机 | 两套 UI 分别写不同逻辑 |
+| Launcher 长按快捷启动 | `app_launcher` + `apps/common/launcher_shortcuts/` + Setup `Quick Launch` | Codex/Focus 内部按键、小智确认流程、运行时 app ID 持久化 |
 | Focus 计时或页面 | `app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp`；NVS namespace `focus`，键 `minutes` / `ring` | Codex A/B 语音、BLE HID、Bridge、其他 NVS namespace |
 | 波形刷新或 UI 功耗 | `CodexView::frameIntervalMs()` 和差分刷新 | BLE connection interval |
 | 音频格式/帧长 | `ble_microphone.cpp`、`ima_adpcm.*`、Bridge 解码 | 只改一端 |

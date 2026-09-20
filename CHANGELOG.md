@@ -1,12 +1,19 @@
 # Changelog
 
-文档版本：1.6；最后更新：2026-09-20 09:53。
+文档版本：1.8；最后更新：2026-09-20 15:49。
 
 本项目采用[语义化版本](https://semver.org/lang/zh-CN/)；所有版本更新都在这里记录，并使用同版本 Git 标签发布。
 
 此文件记录固件历史。Mac Bridge 独立更新：最新 **v1.4.1（2026-09-03）** 与固件 v0.10.7 增加麦克风就绪握手，避免开机或重连后的第一次听写无声。详见 [Bridge Changelog](tools/typeless_bridge/CHANGELOG.md)。
 
 ## [Unreleased]
+
+### Launcher 长按快捷启动 — 2026-09-20
+
+- Launcher 首页增加 1 秒单键长按快捷启动，默认 A 打开小智切换确认页、B 打开 Focus；原 A/B 短按左右导航保持不变。
+- `Settings → Device → Quick Launch` 可分别选择两个快捷目标或 Disabled；使用稳定目标字符串持久化，未知目标不映射到其他 APP。
+- 达到单键长按阈值后等待松手再打开目标，避免按住状态传入新 APP；松手前形成 A+B 会取消本次快捷启动，长按松手也不会再翻页。小智目标不绕过原确认页，也不直接写 `ota_0`。
+- 主机快捷手势测试、Focus 回归测试、ESP-IDF v5.5.4 构建、版本检查和差异检查通过。factory 镜像为 4,121,712 字节，SHA-256 `edbeb52ce0a9830ce02a1511f13dae92b85ca4f976f6c637dabd7023164fe9e2`；已于 2026-09-20 通过 `/dev/cu.usbmodem21201` 写入 `factory @ 0x20000`，写后 digest 与独立 `verify_flash` 匹配，分区表和 otadata 未变化。实机交互验收仍待完成。
 
 ### V2 TODAY 引导线 — 2026-09-20
 

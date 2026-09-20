@@ -32,7 +32,7 @@ public:
     std::function<void(int appID)> onAppClicked;
 
     void init(std::vector<mooncake::AppProps_t> appPorps);
-    void update();
+    void update(bool updateButtonStates = true);
 
 private:
     std::unique_ptr<uitk::lvgl_cpp::Container> _panel;

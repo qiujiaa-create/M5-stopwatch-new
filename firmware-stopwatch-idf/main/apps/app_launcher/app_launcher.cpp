@@ -24,6 +24,10 @@ void AppLauncher::onLauncherOpen()
     mclog::tagInfo(getAppInfo().name, "on open");
 
     show_guide_page();
+    _shortcut_config = launcher_shortcuts::loadConfig();
+    _shortcut_gesture.reset();
+    _pending_shortcut_target = launcher_shortcuts::Target::Disabled;
+    _shortcut_pending = false;
 
     {
         LvglLockGuard lock;
@@ -51,6 +55,11 @@ void AppLauncher::onLauncherRunning()
     LvglLockGuard lock;
 
     uint32_t now = GetHAL().millis();
+    GetHAL().updateButtonStates();
+
+    if (handle_shortcut(now)) {
+        return;
+    }
 
     // Check pending status bar creation
     if (_pending_status_bar_create && !view::is_status_bar_created() && now >= _status_bar_create_tick) {
@@ -60,7 +69,7 @@ void AppLauncher::onLauncherRunning()
 
     update_battery_status_bar(now);
 
-    _view->update();
+    _view->update(false);
     view::update_status_bar();
 }
 
@@ -73,8 +82,65 @@ void AppLauncher::onLauncherClose()
     _pending_status_bar_create = false;
     _status_bar_create_tick    = 0;
     _last_battery_check_tick   = 0;
+    _shortcut_gesture.reset();
+    _pending_shortcut_target = launcher_shortcuts::Target::Disabled;
+    _shortcut_pending = false;
     _view.reset();
     view::destroy_status_bar();
+}
+
+bool AppLauncher::handle_shortcut(uint32_t now)
+{
+    auto& hal = GetHAL();
+    const bool a_pressed = hal.btnA.isPressed();
+    const bool b_pressed = hal.btnB.isPressed();
+    const auto gesture = _shortcut_gesture.update(now, a_pressed, b_pressed);
+
+    if (gesture == launcher_shortcuts::GestureEvent::Cancelled) {
+        mclog::tagInfo(getAppInfo().name, "shortcut cancelled by A+B chord");
+        _pending_shortcut_target = launcher_shortcuts::Target::Disabled;
+        _shortcut_pending = false;
+        return false;
+    }
+
+    if (gesture == launcher_shortcuts::GestureEvent::LaunchA ||
+        gesture == launcher_shortcuts::GestureEvent::LaunchB) {
+        if (!_shortcut_pending) {
+            return false;
+        }
+        const auto target = _pending_shortcut_target;
+        _pending_shortcut_target = launcher_shortcuts::Target::Disabled;
+        _shortcut_pending = false;
+
+        const int app_id = launcher_shortcuts::resolveAppId(target, getAppProps());
+        if (app_id < 0 || !openApp(app_id)) {
+            mclog::tagWarn(getAppInfo().name, "shortcut target unavailable: {}",
+                           launcher_shortcuts::storageKey(target));
+            return false;
+        }
+
+        mclog::tagInfo(getAppInfo().name, "shortcut open: {}", launcher_shortcuts::storageKey(target));
+        return true;
+    }
+
+    if (gesture == launcher_shortcuts::GestureEvent::None) {
+        return false;
+    }
+
+    const auto target = gesture == launcher_shortcuts::GestureEvent::ArmA
+                            ? _shortcut_config.longA
+                            : _shortcut_config.longB;
+    if (target == launcher_shortcuts::Target::Disabled) {
+        return false;
+    }
+
+    _pending_shortcut_target = target;
+    _shortcut_pending = true;
+    if (hal.getButtonConfig().vibrateEnabled) {
+        hal.vibrate(35, 100);
+    }
+    mclog::tagInfo(getAppInfo().name, "shortcut armed: {}", launcher_shortcuts::storageKey(target));
+    return false;
 }
 
 void AppLauncher::onLauncherDestroy()
