@@ -1,6 +1,6 @@
 # M5 StopWatch 当前状态
 
-文档版本：2.1；最后更新：2026-09-20 15:49。
+文档版本：2.3；最后更新：2026-10-12 18:23。
 
 ## 本目录是什么
 
@@ -28,6 +28,8 @@ Git 版本不包含 ChatGPT.app、Typeless.app、已安装的音频驱动、登�
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 中心长按后的上、下、左、右四向 Radial，手表反馈和 Codex 动作均正常。此结果仍不代表本目录新构建产物已刷入手表。
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 顶部向左、向右滑动分别降低、提高 Codex 推理等级。故障原因是本机 Codex Micro 的 `encoderMode` 为 `composer-navigation`，原生 Encoder 事件被用作上下导航。已将 `~/.codex/config.toml` 改为 `reasoning` 并保留原配置备份；运行中的 Codex 还需在「设置 → Codex Micro → Knob」选择 `Reasoning only` 才立即生效。Bridge 的 `codex_reasoning:native_sync` 日志本身不能代替 Codex 界面的操作结果。
 - **V2 页面说明**：底部的两个小圆点是 BLE 与 Wi-Fi 状态；线与圆点组成的图形是同步装饰。V2 当前没有第二页或页切换手势。Codex Micro 与 OpenWatcher V2 通过手表 Setup → Device → Codex Theme 选择。
+- **2026-10-12 Codex 两套主题右键发送调整已刷入**：Codex Micro 与 OpenWatcher V2 共用的 Codex Micro 输入模式中，B 键松开动作已从原生 Voice Chat `ACT09` 改为原生 Send `ACT12`；短按和长按均在松开时发送一次，中心 `ACT12` 入口保留，Typeless/微信输入模式不变。语音门控回归、麦克风就绪回归、版本一致性检查和差异检查通过；ESP-IDF v5.5.4 全量构建通过，factory 应用镜像 4,121,696 字节，SHA-256 `2969d612585235403ce6fb8a20ae148c4466d39885b6afc5fba32dac9b132afc`。刷写前确认设备为 ESP32-S3、factory 为 6 MiB 且 `otadata` 为擦除态；已通过 `/dev/cu.usbmodem21201` 的 `app-flash` 只写入 `factory @ 0x20000`，写后 hash 和独立 `verify_flash` 都匹配，复读确认分区表和 `otadata` 未变。Mac 端虚拟麦克风和安全输出路由健康，刷写重启后 BLE 重连以及两套主题的实际按键/Codex 响应仍待用户验收。
+- **2026-10-12 后续 Typeless B 键行为修正已刷入，实机部分验收**：当前安装的 Bridge 输入模式为 `Typeless`，会同步到手表；因此上述仅在 `Codex Micro` 输入模式生效的原生 `ACT12` 不是用户之前看到 B 键触发语音的路径。按用户确认，保留 A→Typeless `F19`，Typeless 模式的 B 改为短按/长按松开均只发送一次配置的确认键（当前为 `Return`），不再在录音/识别时临时代替 A。微信模式和 Codex 原生模式保持各自现有逻辑；录音/识别中按 B 可能提前发送，推荐先用 A 结束并等文字出现。语音门控回归、麦克风就绪回归、版本一致性与差异检查通过；ESP-IDF v5.5.4 构建通过，factory 镜像 4,121,808 字节，SHA-256 `fe43602c0e848d12273f5462b291f5a96dc93e94e9ee50ee3a6961f143b903cc`。刷写前重核 `/dev/cu.usbmodem21201` 为 ESP32-S3、设备分区表与构建前缀一致、`factory @ 0x20000` 为 6 MiB 且 `otadata` 全擦除；只执行 `app-flash`，写后 hash 与独立 `verify_flash` 匹配，复读确认分区表和 `otadata` 未变。Bridge 重连后再次同步 `typeless` 模式并报告麦克风就绪、虚拟输出路由有效；Typeless 仍选中 `StopWatch Typeless Input`。用户已实测 OpenWatcher V2 的 A 录音流程和 B 短按：B 不再启动 Typeless，正常发送；Codex Micro 主题、B 长按仅发送一次、四 Agent、推理双向及 Radial 松手归中仍待此次镜像的实机验收。上一条已刷入镜像不包含此修正。
 - **2026-09-17 早先任务的构建与刷写记录**：从 Codex App 移除 Official V1 及其专属图片、逐帧宠物动画；原有 `official_v1` 设置回退到 Codex Micro。ESP-IDF 5.5.4 构建通过，应用镜像从 5,904,864 降至 4,025,456 字节，SHA-256 `8778bf86dfde834b6460f75e9774c9f41924b495eabfc1d1876bb1eae3a3cdf8`。当时设备分区表与构建完全一致、otadata 空白且从 factory 启动；仅执行 `app-flash` 并通过写后 hash 校验与串口启动、BLE 重新订阅。此后仓库已有新提交，不能把该哈希当成当前 HEAD 的构建产物；当时未安装本目录 Bridge、未改小智槽与持久数据分区。
 - **2026-09-17 Focus 任务的构建与刷写记录**：Launcher 已加入独立的本地 Focus 应用，A 正计时显示十分之一秒，B 固定 25 分钟倒计时；短按开始/暂停/继续，暂停时长按对应键复位，双击不执行结束。运行计时在离开页面或屏幕休眠后继续，设备重启后清空。最终镜像由 ESP-IDF 5.5.4 构建，4,111,648 字节，SHA-256 `25d5a7e919437c12d3b2c3302f9066277df7858fa48e08b64e802ca89e9c1df5`；主机计时测试通过，`app-flash` 仅写入 `factory` 应用偏移 `0x20000`，写后哈希校验通过并自动重启一次。用户反馈初版 Focus 曾正常打开和操作；最新十分之一秒显示与 A/B 暂停长按复位仍待实机确认。操作说明见 [Focus 使用说明](docs/FOCUS.md)。
 - **2026-09-18 Focus 铃声调整已刷入**：倒计时完成铃声改为六个音符、总时长约 3 秒，并使用音频接口支持的最大提示音幅度；全局扬声器音量设置不变。此前的 1–60 分钟设置、NVS 保存与 `RING ON/OFF` 点击按钮保持不变。主机状态测试和 ESP-IDF 5.5.4 构建已通过；镜像 4,116,000 字节，SHA-256 `8f410119fa2354ecde53e2286a55bdb524bf010b13d0dc29026f6da07062b66e`。已通过 `/dev/cu.usbmodem21201` 的 `app-flash` 写入 factory 应用偏移 `0x20000`，命令成功完成并自动硬复位一次；未再访问串口。铃声音量和 3 秒持续时间仍待实机验收。

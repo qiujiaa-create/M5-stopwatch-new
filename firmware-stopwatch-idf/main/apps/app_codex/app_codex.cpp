@@ -530,7 +530,7 @@ void AppCodex::handleBluetoothKeys()
             }
         }
         if (hal.btnB.wasReleased()) {
-            if (!codex_micro_hid::tap_control_action(codex_micro_hid::ControlAction::VoiceChat) && _view) {
+            if (!codex_micro_hid::tap_control_action(codex_micro_hid::ControlAction::Send) && _view) {
                 LvglLockGuard lock;
                 _view->showActionMessage("CODEX MICRO OFFLINE");
             }
@@ -554,10 +554,21 @@ void AppCodex::handleBluetoothKeys()
         handlePrimaryInputUp("A");
     }
 
+    if (ble_bridge::is_typeless_input_mode()) {
+        // Typeless owns voice input on A. B is always the configured confirm
+        // key, including while Typeless is recording or processing, and only
+        // sends once when the physical key is released.
+        if (hal.btnB.wasReleased()) {
+            mclog::tagDebug(getAppInfo().name, "BLE key B: Typeless confirm release");
+            ble_bridge::send_codex_enter();
+        }
+        return;
+    }
+
     if (hal.btnB.wasPressed()) {
         _confirm_long_sent = false;
-        // Interaction policy shared by both UI themes: while Typeless is busy,
-        // B is a second primary key. Confirm actions are available only at idle.
+        // Keep the existing WeChat confirm/long-press path unchanged.
+        // Typeless returns above before any B-to-primary voice routing.
         _confirm_routes_to_primary = shouldRouteConfirmAsPrimary();
         if (_confirm_routes_to_primary) {
             mclog::tagDebug(getAppInfo().name, "BLE key B: routed to primary interaction");

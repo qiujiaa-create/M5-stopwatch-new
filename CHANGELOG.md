@@ -1,12 +1,24 @@
 # Changelog
 
-文档版本：1.8；最后更新：2026-09-20 15:49。
+文档版本：1.10；最后更新：2026-10-12 18:23。
 
 本项目采用[语义化版本](https://semver.org/lang/zh-CN/)；所有版本更新都在这里记录，并使用同版本 Git 标签发布。
 
 此文件记录固件历史。Mac Bridge 独立更新：最新 **v1.4.1（2026-09-03）** 与固件 v0.10.7 增加麦克风就绪握手，避免开机或重连后的第一次听写无声。详见 [Bridge Changelog](tools/typeless_bridge/CHANGELOG.md)。
 
 ## [Unreleased]
+
+### Typeless B 键固定发送 — 2026-10-12
+
+- 当前 Bridge 输入模式为 `Typeless`，会同步到手表；先前刷入的 `Codex Micro` 模式 B→`ACT12` 因而未作用于用户正在使用的模式。按用户确认，A 继续使用 Typeless `F19`，B 改为松开时发送一次已配置的确认键（当前为 `Return`），短按和长按一致，不再由 B 开始、停止或重试听写。
+- Typeless 录音/识别中按 B 现在也可能提前发送；建议先用 A 结束听写、等文字出现后再按 B。微信输入模式、Codex 原生 `ACT12`、中心发送、音频格式、HID Report Map、Agent、Encoder、Radial、分区和配对数据不变。
+- 语音门控、麦克风就绪、版本和差异检查通过；ESP-IDF v5.5.4 构建通过。factory 镜像 4,121,808 字节，SHA-256 `fe43602c0e848d12273f5462b291f5a96dc93e94e9ee50ee3a6961f143b903cc`。仅 `app-flash` 写入 factory，独立 `verify_flash` 匹配，分区表和 `otadata` 未变。OpenWatcher V2 的 A 录音、B 短按正常发送且不再启动 Typeless 已由用户确认；另一主题、长按和完整 HID 回归仍待验收。详情见 `PROJECT_STATE.md`。
+
+### Codex 两套主题右键原生发送 — 2026-10-12
+
+- Codex Micro 与 OpenWatcher V2 共用的 Codex Micro 输入模式下，B 键由原生 Voice Chat `ACT09` 改为原生 Send `ACT12`；短按或长按均在松开时发送一次，中心原有的 `ACT12` 入口继续保留。
+- Typeless 与微信输入模式的 B 键防误发分流、A 键麦克风、BLE 音频、HID Report Map、Agent、Encoder、Radial、分区和配对数据均不改变。
+- 语音门控回归、麦克风就绪回归、版本一致性检查、`git diff --check` 和 ESP-IDF v5.5.4 全量构建通过。factory 应用镜像为 4,121,696 字节，SHA-256 `2969d612585235403ce6fb8a20ae148c4466d39885b6afc5fba32dac9b132afc`。刷写前确认 ESP32-S3 身份、factory 6 MiB 布局和擦除态 `otadata`；已通过 `/dev/cu.usbmodem21201` 的 `app-flash` 只写入 `factory @ 0x20000`，写后 hash 与独立 `verify_flash` 匹配，分区表和 `otadata` 复读未变。Mac 端虚拟麦克风健康；BLE 重连与两套主题的实际按键/Codex 响应仍待用户验收。
 
 ### Launcher 长按快捷启动 — 2026-09-20
 

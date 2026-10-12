@@ -1,5 +1,7 @@
 # StopWatch BLE Bridge
 
+Document version: 1.0. Last updated: 2026-10-12 18:24.
+
 StopWatch BLE Bridge is the macOS companion app for the M5 StopWatch Codex firmware.
 
 Current version: **v1.4.1**. Full version history: [CHANGELOG.md](CHANGELOG.md).
@@ -37,7 +39,7 @@ Real keyboard input is sent by the device firmware through BLE HID. The bridge a
 
    - Left key: default `F19`.
    - Right key: default `Return`.
-   - Right key long press: default `Command+Return` for Codex guide/follow-up insertion.
+   - Right key long press: default `Command+Return` in WeChat IME mode. Typeless mode sends the configured right key once on release, regardless of press duration.
    - Quota refresh interval: default `300` seconds.
    - Codex quota push: enabled by default, requires local Codex login.
    - Typeless shortcut sync: disabled by default. Enable only when using Typeless and you want the app to write the left key into Typeless local settings.
@@ -175,7 +177,7 @@ For other input apps, leave Typeless shortcut sync disabled and configure shortc
 
 ### Input behavior
 
-The left key toggles voice input. In Typeless mode, the right key follows the same primary-key interaction while recording, processing, or recovering from an interruption, so it cannot submit text before the recognition result can be reviewed. Once Typeless returns to idle/ready, a right-key tap confirms/sends through firmware BLE HID; holding it for two seconds sends the configured long-press action, `Command+Return` by default. This interaction policy is shared by both StopWatch UI themes. The bridge app observes device events only to update status on the StopWatch screen. It does not restore focus, queue Enter, or simulate keyboard events on macOS.
+The left key toggles voice input. In Typeless mode, the right key sends the configured confirm key (`Return` by default) exactly once on physical release, whether it was a short or long press. It does not start, stop, or retry dictation. This interaction policy is shared by both StopWatch UI themes. The bridge app observes device events only to update status on the StopWatch screen. It does not restore focus, queue Enter, or simulate keyboard events on macOS.
 
 If Accessibility is unavailable, the app reports `bridge_limited` to the device. The device still sends its configured BLE HID keys, but Typeless state detection is limited.
 
@@ -306,8 +308,9 @@ emits the pinned BlackHole corresponding-source archive required by GPLv3.
 The menu bar app can switch the device controls among `Typeless`, `WeChat IME`, and `Codex Micro`.
 The Mac helper syncs the selected mode plus primary, confirm, and shake bindings to firmware.
 Firmware persists the last synced bindings and sends BLE HID keys directly without needing the helper; helper-only features are Typeless state detection, quota sync, and configuration UI.
+In `Typeless` mode, A still toggles Typeless dictation through the configured primary key (`F19` by default). B sends the configured right key (`Return` by default) once on release, whether pressed briefly or held; it never acts as a second microphone key. Pressing B during recording or recognition can send prematurely, so finish dictation with A and wait for text before pressing B. This behavior is implemented in firmware; no Bridge rebuild or installation is required.
 In `WeChat IME` mode, primary down/up holds and releases Right Option from firmware HID by default, and confirm sends the configured right key.
-In `Codex Micro` mode, the firmware sends native vendor-HID controls: hold A for Mic (`ACT10`), tap B for Voice Chat (`ACT09`), tap the center dial for Send (`ACT12`), hold an Agent for 480 ms to select it, and swipe for the native radial control. The existing BLE microphone gate still applies, so disabling `M5 StopWatch Mic` keeps the watch microphone idle while an external microphone such as DJI remains selected.
+In `Codex Micro` mode, the firmware sends native vendor-HID controls: press/release A for Mic (`ACT10`), release B for Send (`ACT12`), use the center Send control for the same `ACT12`, hold an Agent for 280 ms to select it, and swipe for the native radial control. A short B press and a long B hold both send exactly once on release; B no longer sends Voice Chat (`ACT09`). The existing BLE microphone gate still applies, so disabling `M5 StopWatch Mic` keeps the watch microphone idle while an external microphone such as DJI remains selected.
 The default shake fallback is `Command+A` followed by `Backspace` for clearing the current input.
 
 ## Install
@@ -388,7 +391,7 @@ the bridge can still keep the device connected and firmware HID input continues 
 
 ### Enter timing after voice recognition
 
-During recording or recognition, the right key is routed to the same interaction as the primary key and does not send Enter. Enter is available only after Typeless returns to idle/ready, leaving the recognized text visible for manual review before submission.
+The right key now sends the configured confirm key even during recording or recognition. To avoid an early submission, use A to end dictation, wait until the recognized text is visible, and then press B. The former B-as-second-microphone safeguard applies only to older firmware.
 
 ## Developer Notes
 

@@ -1,6 +1,6 @@
 # Agent 与二次开发指南
 
-文档版本：1.3；最后更新：2026-09-20 15:38。
+文档版本：1.5；最后更新：2026-10-12 18:23。
 
 **现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录当时的固件已刷入 factory，但后续提交及页面、输入操作仍待单独验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。小智是 ota_0 的独立固件，不是第三套 Codex 页面。
 
@@ -24,7 +24,7 @@
 
 以下既有能力已经完成真实设备验收，可以作为回归基线；不代表 v1.3.6 的双机 Typeless 实测已全部完成：
 
-- A 开始语音，A 或 B 在识别流程中停止；只有回到 Ready 后 B 才恢复确认/发送。
+- 早期 Typeless 模式下 A 开始语音，A 或 B 在识别流程中停止；该历史验收不适用于 Unreleased 的 B 键固定发送调整，后者需重新实机验收。
 - StopWatch 麦克风以 IMA-ADPCM 实时传到 Mac，不生成 WAV。
 - 四个 Agent 点完成触碰预览、280ms 长按确认和 Codex 端槽位切换；Working 点在任务执行期间闪动并保持屏幕不自动息屏。
 - 顶部左右滑动可以改变推理等级。
@@ -98,18 +98,26 @@ Mac 本机 Codex 状态
 
 ### 4.1 实体按键
 
-默认设置：
+`Codex Micro` 输入模式：
+
+| 操作 | 默认行为 | 备注 |
+| --- | --- | --- |
+| A 按下/松开 | 原生 Mic `ACT10` | 保留麦克风就绪门控 |
+| B 松开 | 原生 Send `ACT12` | 短按或长按松开均发送一次；不再发送 Voice Chat `ACT09` |
+| 中心发送入口 | 原生 Send `ACT12` | 与 B 并存 |
+
+Typeless 输入模式：
 
 | 操作 | 默认行为 | 备注 |
 | --- | --- | --- |
 | A 短按 | `F19`，开始/停止语音 | 由固件直接发送 BLE HID |
-| B 短按，语音流程中 | 临时代替 A | 防止识别未完成时误发送 |
-| B 短按，Ready | `Return` | 确认或发送 |
-| B 长按 | `Command+Return` | 默认长按时间为 2 秒，可在 Bridge 配置 |
+| B 短按/长按松开 | `Return` | 发送一次当前配置的确认键，不再代替 A 控制录音；录音/识别期间也可能提前发送 |
 | 摇晃 | Clear Input | 默认通过已配置的清除动作 |
 | A+B | 退出 Codex App | 回到设备 Launcher |
 
-Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。修改输入逻辑时必须同时验证 Codex Micro 和 OpenWatcher V2，因为两套 UI 共用同一交互状态机。
+微信输入模式的 A 按住右 Option、B 短按确认和 B 长按配置动作维持原样。Typeless 用户应先用 A 结束听写并等待文字出现，再按 B 发送；旧版的 B 录音防误发逻辑不再适用于 Typeless。Bridge 当前输入模式会同步并持久化到手表；主题选择本身不会切换输入模式。
+
+Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。这些标准键位不替代 Codex Micro 的原生 `ACT10`/`ACT12`。修改输入逻辑时必须同时验证 Codex Micro 和 OpenWatcher V2，因为两套 UI 共用同一交互状态机。
 
 Launcher 首页单独提供 1 秒长按快捷启动，默认 A 打开 Xiaozhi 确认入口、B 打开 Focus；短按 A/B 仍为上一个/下一个图标。目标可在 `Settings → Device → Quick Launch` 中分别设置，NVS namespace 为 `launcher`，键为 `hold_a` / `hold_b`。目标保存稳定字符串而不是运行时 app ID，解析失败时禁用。达到阈值时只锁定目标，必须松手后再打开 APP，避免物理按住状态被新 APP 继承；松手前形成 A+B 会取消单键目标。该逻辑位于 `apps/common/launcher_shortcuts/` 和 `app_launcher`，不得扩散到 Codex/Focus 内部的 A/B 状态机。小智目标只打开 `AppXiaozhi` 的现有确认页，不直接切换 `ota_0`。
 
