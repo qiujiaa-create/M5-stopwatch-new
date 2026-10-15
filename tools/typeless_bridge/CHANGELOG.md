@@ -1,6 +1,20 @@
 # StopWatch BLE Bridge Changelog
 
+文档版本：1.1；最后更新：2026-10-15 20:24。
+
 Mac Bridge 使用独立语义化版本。固件与 Bridge 的兼容版本关系见仓库根目录 [README](../../README.md#版本历史)。
+
+## [1.4.2] - 2026-10-15
+
+### Fixed
+
+- 修复虚拟输出重建时 AudioOutputUnitStop 与渲染回调查询 CurrentDevice 发生锁反转，导致 Bridge 主线程、BLE 面板与语音状态同步停滞，出现 Codex Linking、5H 未知及 MIC LOST。
+- 停止前先关闭渲染入口并静音，等待已进入的回调退出再停止/释放音频单元；路由属性监听器只锁存静音，避免递归查询。正常渲染仍在转换前后校验实际设备，故障不重放旧音频。
+
+### Validation
+
+- Swift 完整构建、回调关闭/排空并发测试、原有麦克风就绪与云同步回归通过。真实虚拟设备 24 次活动回调停止/重建、物理输出拒绝、采样率与默认设备保持、16 kHz→48 kHz 虚拟输入回环及故障尾音静音通过。
+- 本机安装、连接/定时推送与用户实际录音结果分别记录于根目录 PROJECT_STATE.md；上述主机测试不代表实体 A 键与手表显示已验收。固件、BLE 格式、配对与驱动不变。
 
 ## [1.4.1] - 2026-09-03
 
@@ -332,6 +346,7 @@ Mac Bridge 使用独立语义化版本。固件与 Bridge 的兼容版本关系�
 - 支持 `M5Codex-*` 连接、Codex 额度推送、输入模式和按键配置同步。
 - 支持 Typeless 状态观察、LaunchAgent 安装和 arm64 ZIP 发布包。
 
+[1.4.2]: https://github.com/qiujiaa-create/M5-stopwatch-new/tree/main
 [1.4.1]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.4.1
 [1.4.0]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.4.0
 [1.3.5]: https://github.com/liptoxli/M5stopwatch-vibecoding/tree/v1.3.5

@@ -6,6 +6,7 @@
 #pragma once
 #include <lvgl.h>
 
+LV_FONT_DECLARE(codex_deck_16);
 LV_FONT_DECLARE(MontserratSemiBold26);
 LV_FONT_DECLARE(CommissionerMedium64);
 LV_FONT_DECLARE(CommissionerMedium108);

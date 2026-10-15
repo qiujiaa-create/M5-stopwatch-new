@@ -1,6 +1,6 @@
 # M5 StopWatch 当前状态
 
-文档版本：2.4；最后更新：2026-10-15 12:01。
+文档版本：2.14；最后更新：2026-10-15 20:24。
 
 ## 本目录是什么
 
@@ -12,8 +12,8 @@
 
 | 路径 | 作用 | 状态 |
 | --- | --- | --- |
-| `firmware-stopwatch-idf/` | factory 槽的 StopWatch 主固件；OpenWatcher V2、独立 Focus、BLE HID 与 Companion | V2 单主题与开机直达已刷入 factory、独立校验通过；屏幕和实体操作待用户验收 |
-| `tools/typeless_bridge/` | macOS Bridge；本机额度采集、BLE 推送、Typeless 协调 | 本目录构建成功；本次迁移未替换当前安装的 App |
+| `firmware-stopwatch-idf/` | factory 槽的 StopWatch 主固件；OpenWatcher V2、独立 Focus、BLE HID 与 Companion | V2 单主题与开机直达已刷入；紧凑电池/蓝牙图标版已刷入 factory、独立校验通过；无状态点、电池无百分号，新间距待实机确认 |
+| `tools/typeless_bridge/` | macOS Bridge；本机额度采集、BLE 推送、Typeless 协调 | v1.4.2 已安装本机 App；语音启停、Ready 与 5H 显示由用户确认恢复；连接与定时额度推送核验通过 |
 | `firmware-xiaozhi/` | ota_0 槽的小智 v2.2.6 及本机板卡适配 | 源码已导入；当前设备槽位需在再次切换后重核 |
 | `server/cloud-sync/` | 可选同步服务 | 本机盘点时未启用 |
 | `local-reference/` | 两套本机 `sdkconfig` 参考 | 未纳入 Git；转移机器时重新核对 |
@@ -24,6 +24,57 @@ Git 版本不包含 ChatGPT.app、Typeless.app、已安装的音频驱动、登�
 
 ## 当前功能验收边界
 
+- **2026-10-15 Bridge 音频停止死锁已修复并安装，语音及显示由用户确认恢复**：用户报告 Linking、5H 不显示，随后出现 MIC LOST 并要求修复。两次 live 采样均确认 Bridge 主线程停在 AudioOutputUnitStop 的 Core Audio 锁，音频回调则在 CurrentDevice 查询等另一把锁，文件日志停于 19:18。标准 HID、Vendor HID 独立，不以任务切换正常推断 Companion/音频健康。分支 `codex/fix-bridge-microphone-stop-deadlock` 保留全部表盘工作。
+  - **修复/构建**：Bridge v1.4.2 在停止前静音并关闭新回调、等待已有回调完成，再停止/释放音频单元；监听器只锁存静音，不递归查询。保留正常转换前后真实设备校验。完整 Swift 构建、并发排空、24 次真实活动回调停止/重建、虚拟输入回环及故障尾音归零、麦克风就绪与云同步回归通过；默认输入/扬声器/48 kHz 未变。
+  - **安装/运行**：旧 v1.4.1 App 和两份故障采样备份在忽略目录 `tools/typeless_bridge/.build/device-backup/mic-stop-deadlock-20261015-200555/`，旧二进制 SHA-256 `46e2b2518b93290428f7c90210b8a51870369021768ce89322e18a34585514c2`。紧急重启后真实输出健康、连接额度推送恢复。20:14 新 v1.4.2 已安装，SHA-256 `2918530decd71c1951a540c5e6733352e565874075129716f2a3fc4af70bc1b2`，沿用原有 ad-hoc 签名方式、严格签名核验通过、配置哈希未变。进程实际输出审计只见允许的 M5 虚拟出口（48 kHz）；当前录音日志 215 包、lost=0、dropped=0，有开始与停止事件。连接额度 seq=2 和重连 seq=5 均推送成功；随后完整周期 seq=6、1454 字节、31 片、reason=quota 完成，确认并非只恢复一次性推送。未改驱动、系统扬声器/采样率或手表闪存。
+  - **实体交互**：用户明确反馈“已恢复，录入和停止正常”，并确认顶部 Codex Ready 和 5H 数值均恢复。此前中断录音作废、未拼接。串口接收核验意外触发一次 USB_UART_CHIP_RESET（虽然请求 DTR/RTS 为 false）；已向用户说明。随后自动进入 factory/Codex、麦克风就绪配置为 true，设备日志确认收到 seq=5 的 1488 字节额度面板；无新固件构建/刷写。后续仅看 Mac 日志，不再次开启串口。新一轮长期稳定性、息屏/唤醒仍需观察；源码与文档纳入本次集成交付。
+
+- **2026-10-15 19:40 底部紧凑电池/蓝牙图标已刷入，间距与观感待实机确认**：按用户指定，用左横向电池和右蓝牙图标替换四向提示文字，并移除两个旧状态点。电池仅显示电量数字、不带 `%`，≥30% 绿框、<30% 红框；蓝牙连接蓝色，断连红色加斜线。图标在四向面板与语音期间保留，普通 BLE 状态文字由图标替代，其他临时动作提示占用该行后恢复。读取现有 HAL 电量缓存和 BLE 连接真值，不改按键/通信/音频/分区。分支 `codex/v2-battery-bluetooth-footer`，旧工作保留。初版已刷入并独立校验，用户反馈与 2/3 号卡片重叠，继续要求缩小/靠近并去掉 `%`：当前电池 `(190,434,46,22)`、蓝牙 `(254,434,22,22)`，控件间距 18 px、距卡片下沿 7 px；
+  - **主机预览/检查**：实际 LVGL 默认/低电/30% 边界/断连划线预览已更新，电池均仅数字。覆盖 0/29/30/31/100/非法电量，边框颜色、蓝牙蓝色/红线、无旧状态点、临时动作信息后恢复、与卡片至少 6 px 间隔（当前 7 px）、圆屏边界。静止一秒零刷新，单次电量变化仅更新 46×22 px、额度零重画；四方向反馈仍 20,572–20,850 像素、零额度重画，本次展开 130,496 / 关闭 99,436，未超过既定 110% 上限。原 Agent/Encoder/Radial、波形与语音门控/Bridge 就绪检查通过；刷新量不是实机端到端延迟测量。
+  - **构建**：ESP-IDF v5.5.4 通过，应用 4,025,856 字节，SHA-256 `edaa281ffc7d2b9a792d98ac88317e8e90bffab8041181354ff37d22467c5bb4`。A/B 控制器、BLE Bridge、Vendor HID、BLE 麦克风源码仍与 `7feb001` 逐字节一致，版本和差异检查通过。
+  - **安装/运行**：重核实际 ESP32-S3 v0.2、兼容分区和 factory 启动选择；旧应用 `firmware-stopwatch-idf/build-v2/device-backup/status-icons-compact-20261015-194719/application.before.bin` 独立 verify_flash 与设备匹配，SHA-256 `1117a836580a3d5254747636dd4e71c3f1110e8981dffd5eb5fda3d4390c21bb`。仅 app-flash 更新 factory @ 0x20000，写后和独立校验通过；分区表/otadata 复读未变。复位进入 Codex，V2 page ready 2859 ms，无崩溃记录；本轮设备串口确认 BLE 连接/加密与音频 Notify 恢复，当前进程输出审计确认允许的 48 kHz 虚拟出口。Bridge 文件日志停在 19:18，当前 stdout/stderr 为 /dev/null，未将旧日志当作本轮额度推送证据，也未修改 Bridge。
+  - **实机边界**：初版图标的遮挡由用户实测反馈，已按要求缩小/靠近/下移、去掉 `%`；紧凑版新间距和显示观感、其他实体交互仍待用户确认。源码与文档纳入本次集成交付。
+
+- **2026-10-15 19:11 圆形分区方向盘已刷入，观感及触控边界待实机复测**：用户确认上一版速度响应良好，再要求优化颜色和形状，并确认圆形分区方案。304 px 石墨黑圆底、四个圆头方向弧（外半径 132 px、厚度 64 px、跨度 40°），深灰/柔白默认、深青/青色按压；取消方框、描边、阴影和发光。中央关闭键可见直径 64 px、触控半径 40 px，方向触控使用 62–140 px 半径、各朝向 ±40° 的扇区，间隙不发方向。保留 200 ms 展开、原生 Radial 和松手归中、按下关闭、防穿透及语音收起。分支 `codex/v2-circular-radial-style`，旧工作保留；
+  - **主机预览/验证**：实际 LVGL/PARTIAL 生成默认 `docs/assets/openwatcher-v2-radial-detail.png` 与按压 `docs/assets/openwatcher-v2-radial-detail-pressed.png`，均为示例数据、非设备实拍。四向按下/松手为 20,572–20,850 像素、额度背景零绘制，低于 25,000 上限；展开 124,456、关闭 107,436，与上一版相同，满足不超过 110%。逐像素验证所有实心弧落在对应触控区、每次松手恢复整帧一致；间隙/内外留白无方向、× 快速关闭且不依赖 view.update、原 Agent/Encoder/防穿透/语音收起归中/Processing 显示回归通过。语音启动门控、Bridge 就绪、版本和差异检查通过。指标为主机绘制负担，不代表实物端到端时间。
+  - **构建**：ESP-IDF v5.5.4 通过，新应用 4,025,152 字节，SHA-256 `29f9eac308d7273ce5369a7d74fa8962b174f92044c493e3b2547a86f9ee0b93`；A/B 控制器、BLE Bridge、Vendor HID 和 BLE 麦克风源码与 `7feb001` 逐字节一致。
+  - **安装/运行**：重核实际 ESP32-S3 v0.2、兼容分区与 factory 启动选择，旧应用 `firmware-stopwatch-idf/build-v2/device-backup/circular-radial-20261015-190822/application.before.bin` 独立 verify_flash 与设备匹配，SHA-256 `d42d4e41f7e6961b48c40168e8e4d150b02805ca4bef3dd4c02e9f2beed47a23`。仅 app-flash 写入 factory @ 0x20000；写后和独立校验通过，分区表与 otadata 复读未变。复位直接进入 Codex、V2 page ready 2843 ms，采集无崩溃；BLE/事件/额度面板恢复，虚拟音频 48 kHz 健康、进程出口审计通过。未写其他分区或替换 Bridge。
+  - **实机边界**：用户已经确认上一版响应速度良好、此前麦克风问题解决；本次圆形观感、边缘/间隙触控、实际宿主方向动作及 A/B/A+B 等物理回归仍需用户确认。源码与文档纳入本次集成交付。
+
+- **2026-10-15 18:58 四向面板展开/关闭响应修复已刷入，实际速度待复测**：用户确认面板能弹出，但展开与中央 × 关闭偏慢。定位并复现首次置顶导致父页面失效、单按钮反馈重刷整块 304×304 面板；本次预建固定大小的独立面板、按钮反馈局部刷新，× 改为 LVGL 按下事件即关闭并锁到松手。取消长按期间的逐帧进度环绘制，展开阈值仍为 200 ms；额度弧分段先做裁剪相交检查，避免恢复底图时提交远处的圆弧绘制任务。分支 `codex/v2-radial-response-fix`，此前工作保留；
+  - **主机回归**：实际 LVGL/PARTIAL 完整展开刷新量 288,216→124,456 像素（原实现 250 ms 采样还未完整绘完，350 ms 才能计全）；方向按下/松手 184,832→14,112、零额度背景绘制；× 旧按压+关闭约 199,852，新按下关闭约 107,436。测试验证无需 view.update 的 LVGL 输入事件已关闭、按住不重开、四向/跨区/防穿透/录音归中、Idle/Processing 波形与触摸门控；静止与录音刷新指标未退化。关闭恢复的额度区域与打开前一致，新旧渲染器额度区逐像素一致。语音启动门控、Bridge 就绪、版本与差异检查通过。指标衡量渲染负担，不是实机端到端毫秒测量。
+  - **构建**：ESP-IDF v5.5.4 通过，应用 4,025,024 字节，SHA-256 `d42d4e41f7e6961b48c40168e8e4d150b02805ca4bef3dd4c02e9f2beed47a23`。A/B 控制器、BLE Bridge、Vendor HID、BLE 麦克风源码仍与 `7feb001` 逐字节一致。
+  - **安装/运行**：核对实际 ESP32-S3 v0.2、兼容分区和 factory 启动选择；旧应用 `firmware-stopwatch-idf/build-v2/device-backup/radial-response-20261015-185117/application.before.bin` 经独立 verify_flash 与设备匹配，SHA-256 `71cd0556b5ad82fad85c7cdd646476d6c6421c0c2bb056514f0ead718bf7e496`。仅 app-flash 写 factory @ 0x20000，写后及独立校验通过，分区表与 otadata 复读未变。复位进入 Codex、V2 page ready 2848 ms，采集无崩溃；BLE/事件/面板恢复，虚拟输出 48 kHz 健康、进程输出审计通过。未写其他槽或安装 Bridge。
+  - **实机**：此前用户确认麦克风已解决、面板能够展开，但报告本轮修复前的展开与关闭慢。本轮响应速度、实体按键/方向实际动作仍待用户复测；不以主机刷新量或写后校验代替实机验收。源码与文档纳入本次集成交付。
+
+- **2026-10-15 18:45 四向放大面板与短按方向已刷入，等待实机复测**：用户确认麦克风问题已解决；本次只修改视图与相关布局/检查，将中心长按由 280 ms 改为 200 ms，弹出 304×304 px 居中面板；开启手指须先松手，再短按方向。84×84 px 方向按钮使用原生 Radial，按下距离 1、松手归中；方向不随拖动切换，面板保持打开，可通过中央 × 或面板外点击关闭。语音进入自动收起并归中，四 Agent 保留 280 ms，A/B、音频和 Encoder 链路不变。分支 `codex/v2-radial-tap-detail`，此前未提交工作保留；
+  - **主机检查**：实际 LVGL/PARTIAL 验证短触不展开、200 ms 阈值（含输入轮询/布局后 250 ms 主机推进可见）、原开启手指不选方向且松手后持续展开、四向按下角度/距离正确与松手归中、按住不重复提交、跨区归中/不重武装、中央/外侧关闭及底层 Agent/Encoder 防穿透、录音打断关闭与归中。展开后静止一秒零刷新；原四 Agent、双向 Encoder、Processing 波形收起/灰显/门控、语音启动门控、Bridge 就绪、版本及差异检查通过。主机时间不是实物触摸端到端测量。
+  - **构建**：ESP-IDF v5.5.4 通过，应用 4,021,792 字节，SHA-256 `71cd0556b5ad82fad85c7cdd646476d6c6421c0c2bb056514f0ead718bf7e496`；A/B 控制器、BLE Bridge、Vendor HID、BLE 麦克风四个源文件与 `7feb001` 逐字节一致。
+  - **安装/运行**：重核实际 USB 端口为 ESP32-S3 v0.2、分区与 factory 启动选择兼容；旧应用 `firmware-stopwatch-idf/build-v2/device-backup/radial-detail-20261015-183918/application.before.bin` 经独立 verify_flash 与设备匹配，SHA-256 `2a5c6d0aca2b5911567c3c9ec7899fa8bd73380ddfc74433de747af1c86d0f6b`。仅 app-flash 写入 factory @ 0x20000，新应用写后与独立校验通过；分区表和 otadata 复读未变。复位进入 Codex，V2 page ready 2845 ms，无崩溃记录；BLE/事件订阅/额度恢复，48 kHz 虚拟输出健康、进程输出审计通过。没有安装新 Bridge 或写小智/配对等其他分区。
+  - **实机边界**：用户对上一安装版的麦克风问题明确反馈已解决；本次 0.2 秒展开手感、四方向实际宿主动作、A/B 与 A+B、息屏/恢复及其余物理回归仍需用户确认。源码与文档纳入本次集成交付。
+
+- **2026-10-15 18:32 停止录音波形反馈修复已刷入 factory，等待实机复测**：用户已确认当前左右切换正常、语音录入基本正常；尚未确认停止录音后波形消失的手感。检查发现视图在 Recording 和 Processing 都显示动画，直到主机空闲或既有保护超时才收起。修复只在 Recording 显示波形，进入 Processing 即恢复灰显方向盘，保留顶部处理状态和触摸门控；不改变 A/B、主机识别时限、音频或 HID。分支 `codex/v2-waveform-stop-feedback`，保留此前未提交工作。
+  - **主机验证**：实际 LVGL 在旧代码上复现波形未隐藏的断言失败；修复后 40 ms 主机推进内隐藏、方向盘真实像素灰显，持续 Processing 5.5 秒零动画刷新，Encoder/四 Agent/Radial 均不发动作，Idle 恢复。原触摸/局部刷新回归、语音启动门控、Bridge 麦克风就绪、版本与差异检查通过。A/B 控制器、BLE Bridge、Vendor HID 和 BLE 麦克风源码与 `7feb001` 逐字节一致。主机时间不等于物理按键端到端时间。
+  - **构建**：ESP-IDF v5.5.4 通过，应用 4,020,512 字节，SHA-256 `2a5c6d0aca2b5911567c3c9ec7899fa8bd73380ddfc74433de747af1c86d0f6b`。
+  - **安装/连接**：重核实际端口对应 ESP32-S3 v0.2，兼容分区和 factory 启动选择；旧应用备份 `firmware-stopwatch-idf/build-v2/device-backup/waveform-stop-20261015-183124/application.before.bin` 经独立 verify_flash 与设备匹配（SHA-256 `8aaafa64be8f8a516b3fcdff2c0a2dc360ccbcc9f31d99ddf5071c0dfce113bb`）。仅 app-flash 写入 factory @ 0x20000；写后与独立校验通过，分区表和 otadata 复读未变。复位进入 Codex，V2 page ready 2844 ms，采集无崩溃；BLE/事件/面板恢复，虚拟音频输出 48 kHz 健康，进程输出路由审计通过。未改 Bridge 或其他固件槽。
+  - **实机**：用户对上一安装版的左右切换、基本语音录入反馈已记录；本次波形收起速度、A/B 与其余实体交互仍待复测。没有提交、推送；机器检查不代替实际录入与显示反馈。
+
+- **2026-10-15 18:26 输入延迟修复与左右旋转点击版已刷入 factory，等待响应复测**：用户在上一版实机报告顶部滑动迟钝、A 键开始/停止录音变慢或失灵。当前 Bridge 仍为 Typeless；最近录音连续 3733 包且 lost/dropped 均为 0，不能据此排除启停响应问题。局部刷新复现发现全屏反馈层与未变化进度条造成无效刷新，波形还会反复调用整张额度背景绘制。已隔离动态区域、只更新变化属性；A/B 控制器、语音门控、HID 与音频源文件逐字节对照 `7feb001` 未变，没有改主机配置。
+  - **最终交互**：按用户后续要求，上方取消滑动和全部文字，改为左右两个箭头按钮。左侧在原区松手发送一次左旋，右侧同理；移动超过 16 px、跨区、移出或开始录音取消整次触摸，长按不连发；中间保持 16 px 空隙，原生 Encoder 传输及宿主映射不变。分支 `codex/v2-input-latency-fix`，上一版未提交工作保留。
+  - **主机检查/构建**：实际 LVGL 使用与设备相同的 PARTIAL/120 行缓冲；静止一秒从 52 次微小刷新（104 像素）降为 0，录音一秒额度图绘制 131→0，最终两个点击合计 25,024 像素且额度图零绘制。覆盖左右松手一次、按住不提交/不连发、跨区/拖动/移出/语音取消、四 Agent、四向/归中及语音门控；版本与差异检查通过。指标是主机绘制工作量，不是设备按键响应时间。ESP-IDF v5.5.4 构建通过，新镜像 4,020,544 字节，SHA-256 `8aaafa64be8f8a516b3fcdff2c0a2dc360ccbcc9f31d99ddf5071c0dfce113bb`。
+  - **安装/连接**：重核 ESP32-S3 v0.2、分区和 factory 启动选择，并独立验证回退应用 `firmware-stopwatch-idf/build-v2/device-backup/input-latency-20261015-181630/application.before.bin` 与设备旧应用匹配（SHA-256 `738115b061ccbc6d8e630f1a10cf0402f7a73229aa3ee9a70d4e6f25178a6aa2`）；然后只 `app-flash` 更新 `factory @ 0x20000`。写后 hash 与独立 verify_flash 通过，分区表及 otadata 复读未变。USB 复位进入 Codex，V2 page ready 2850 ms，无崩溃记录；BLE、面板和麦克风就绪恢复，虚拟输出 48 kHz 健康，重连后进程音频路由审计通过。未更新小智、Bootloader、NVS、storage、配对或 Bridge。
+  - **仍待用户确认**：顶部左右点击和 A 键启停的真实响应、实际语音识别及其余触摸/按键回归。主机与路由检查不代替此次修复的实机手感确认；源码与文档纳入本次集成交付。
+
+- **2026-10-15 17:50 经用户授权，弧形任务卡表盘已刷入 factory，实机交互待验收**：重核实际端口对应 ESP32-S3 v0.2，设备分区表与构建一致，factory 为 `0x20000 / 6 MiB`、小智 ota_0 为 `0x620000 / 3 MiB`，otadata 全擦除，选择 factory。先完整备份旧 factory 到本机忽略目录 `firmware-stopwatch-idf/build-v2/device-backup/task-deck-20261015-174305/factory.before.bin`（6,291,456 字节，SHA-256 `eac8ec60a8f3f7207dd4e809d6b1f0e8faaa467b665b5a218daaed3f9e4a047a`）；备份中旧应用前 4,113,472 字节的 SHA-256 与此前安装镜像 `aa8ac2ba214c2963755c71c0c247b03d77b690d5426e3a29bec6241db59b8939` 一致。
+  - **刷写**：`idf.py -B build-v2 app-flash` 仅写入 factory 应用，4,020,800 字节，SHA-256 `738115b061ccbc6d8e630f1a10cf0402f7a73229aa3ee9a70d4e6f25178a6aa2`。写后 hash 与独立 `verify_flash` 均通过；复读确认分区表及 otadata 与写前逐字节一致。未写 Bootloader、小智、NVS、storage 或配对数据，没有安装新 Bridge、改主机 Knob 配置、提交或推送。
+  - **启动与连接**：USB 复位串口确认从 `factory @ 0x20000` 启动、`startup target: Codex`、`V2 page ready: 2854 ms since boot`，25 秒采集中没有崩溃/异常复位。Bridge 恢复原生 HID 后重连，设备事件订阅、Typeless 配置和 `microphone_ready=true` 同步完成，额度面板重新推送；虚拟输出 `output=healthy`、`route valid=true`、48 kHz，运行进程输出审计通过且只使用允许的虚拟设备。这些检查不等于真实语音录入或触摸动作验收。
+  - **实机待验收**：屏幕布局与文字、四卡短触取消/长按一次/实际任务切换、旋钮双向、自定义映射、四向输出与松手归中、A/B 与 A+B、真实语音、息屏恢复、执行期间亮屏。没有替用户执行这些操作。
+
+- **2026-10-15 弧形任务卡表盘构建阶段记录（同日后续刷写见上）**：按用户确认图将四个 Agent 点改为编号/中文状态任务卡，加入精简旋钮滑动入口和常驻四向方向盘；保留 280 ms 长按、原生 Encoder/Radial、A/B、语音门控与三条 BLE 链路。5H 条内使用红→橙→黄→绿连续渐变，越界、未知或过期不伪造剩余量；24 个活动桶按时间从左到右显示。未就绪显示离线、无灯效状态显示未知，灯效不作为发送门槛；一次触摸只提交一个槽位，确认前滑动换目标重新计时。中文字体为 30 个字形的子集。任务分支 `codex/v2-task-deck-ui`，源码回退比较基线 `7feb001`；没有提交或推送。
+  - **主机验证**：实际 `view.cpp`、生产 LVGL 包装类、LVGL 与字体编译为主机渲染器，仅替换 HAL。圆屏四角、触摸区互斥、四槽位、短触取消、一次提交、确认前后滑动、未分配灯效槽位、旋钮双向、四向方向/距离、松手和录音归中、录音禁止触摸、5H 渐变与越界轨道检查通过；生成正常、旋钮、四向、录音、中断、离线画面。语音启动门控、Bridge 麦克风就绪、版本一致性与差异检查通过。示例渲染见 [使用说明](docs/CODEX_TASK_DECK.md)，不视为设备实拍或 BLE 实机验收。
+  - **固件构建**：使用现有 ESP-IDF v5.5.4 与本机依赖，`idf.py -B build-v2 build` 通过。`build-v2/StopWatch-UserDemo.bin` 为 4,020,800 字节，SHA-256 `738115b061ccbc6d8e630f1a10cf0402f7a73229aa3ee9a70d4e6f25178a6aa2`，可放入 6 MiB factory。构建提示该镜像大于独立小智 ota_0 的 3 MiB，为双固件布局既有边界；未调整分区。没有安装 Bridge、改主机 Knob 配置、访问设备闪存或写入持久数据。
+  - **安装和实机**：本次未刷写。仍待检查圆屏实物观感、短触取消/长按一次、四 Agent 实际切换、旋钮双向、Radial 四向与归中、A/B 与 A+B、BLE 重连、真实语音和虚拟麦克风健康、息屏恢复及任务执行期间亮屏。下方旧安装记录仍描述旧镜像，不能用来接受本次新布局。
+
 - **2026-10-15 经用户授权，V2 单主题与开机直达已刷入 factory**：刷写前核对实际 USB 端口对应 ESP32-S3 v0.2，设备分区表与构建一致，factory 为 6 MiB、偏移 `0x20000`，小智 ota_0 为 3 MiB、偏移 `0x620000`，otadata 为全擦除态，选择 factory。先完整备份旧 factory 6 MiB 到本机忽略目录 `firmware-stopwatch-idf/build-v2/device-backup/factory.before.bin`（SHA-256 `4365fd904781b0f571829bb2e29a8b7011fd371e93ac52def63aa7402b385d32`）；随后 `idf.py -B build-v2 app-flash` 只写入上述 factory 应用，写后 hash 和独立 `verify_flash` 均匹配，复读确认分区表与 otadata 未变化。安装镜像 4,113,472 字节，SHA-256 `aa8ac2ba214c2963755c71c0c247b03d77b690d5426e3a29bec6241db59b8939`。USB 复位后的串口记录显示从 factory 启动、`startup target: Codex`、`V2 page ready: 2865 ms since boot`，没有 Launcher on open 或崩溃/复位异常；这是复位启动初始化时间，不是完整断电冷启动或旧版对照测试。Bridge 已恢复原生 HID 后重连，设备事件与音频订阅完成，Typeless 配置及 microphone_ready=true 同步成功，时间和额度面板重新推送；麦克风 output=healthy、route valid=true、48 kHz，进程输出审计通过且只使用允许的虚拟设备。未安装新 Bridge，未写 Bootloader、小智、NVS、storage 或配对数据。实际屏幕、断电开机、A/B、短触取消/长按一次提交、四 Agent、推理双向、Radial 归中和真实语音录入仍待用户操作确认；不将启动/订阅/路由日志等同于实机交互验收。
 
 - **2026-10-15 V2 单主题与开机直达构建记录（刷写前）**：删除旧 Codex Micro Dashboard、专属绘制/触摸逻辑和 Setup 的 Codex Theme 选择项；固定初始化 OpenWatcher V2，不再读写历史 `theme` / `theme_gen`。保留 Codex Micro 原生输入模式与现有 A/B 状态机。StopWatch 主固件启动时通过 Launcher 原有生命周期直接打开 Codex，不创建 Launcher 首页、不等待首次引导、不播放 Launcher 开机音；Codex 打开时清除 BootLogo，A+B 关闭后回到 Launcher。首次触摸及手势轮询由空闲 100 ms 缩短至约 33 ms（主循环调度影响实际间隔），长按确认仍为 280 ms。主机启动生命周期检查通过：自动进入 Codex、不创建 Launcher UI、退出后正常返回且不自动重入、缺少 Codex 时安全回退；语音门控、麦克风就绪、Launcher 快捷键、Focus、版本与差异检查通过。ESP-IDF v5.5.4 全量构建成功，`build-v2/StopWatch-UserDemo.bin` 为 4,113,472 字节，SHA-256 `aa8ac2ba214c2963755c71c0c247b03d77b690d5426e3a29bec6241db59b8939`；比 2026-10-12 最后记录的 4,121,808 字节镜像减少 8,336 字节。保留原 build 产物，现有依赖未刷新。构建阶段尚未刷写；后续安装证据见同日刷写记录。实际冷启动、画面、实体操作与空闲功耗仍需单独验收。源码回退基线为 `649f274`，任务分支 `codex/v2-only-fast-start`，尚未提交。
@@ -31,7 +82,7 @@ Git 版本不包含 ChatGPT.app、Typeless.app、已安装的音频驱动、登�
 - **已由用户在原安装组合上确认**：OpenWatcher V2 显示 5H 与周额度，并曾自动刷新为 5H 6% / 周 28%。这证明当时 Bridge 到手表的额度链路有效，不证明本目录产物已安装。
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 中心长按后的上、下、左、右四向 Radial，手表反馈和 Codex 动作均正常。此结果仍不代表本目录新构建产物已刷入手表。
 - **2026-09-17 在当前安装组合上由用户实机确认**：V2 顶部向左、向右滑动分别降低、提高 Codex 推理等级。故障原因是本机 Codex Micro 的 `encoderMode` 为 `composer-navigation`，原生 Encoder 事件被用作上下导航。已将 `~/.codex/config.toml` 改为 `reasoning` 并保留原配置备份；运行中的 Codex 还需在「设置 → Codex Micro → Knob」选择 `Reasoning only` 才立即生效。Bridge 的 `codex_reasoning:native_sync` 日志本身不能代替 Codex 界面的操作结果。
-- **V2 页面说明**：底部的两个小圆点是 BLE 与 Wi-Fi 状态；线与圆点组成的图形是同步装饰。V2 当前没有第二页或页切换手势。当前只保留 OpenWatcher V2，历史主题选择入口已移除。
+- **V2 页面说明**：底部已用电池和蓝牙图标替代两个小圆点与四向提示文字。历史线与圆点图形为同步装饰。V2 当前没有第二页或页切换手势。当前只保留 OpenWatcher V2，历史主题选择入口已移除。
 - **2026-10-12 Codex 两套主题右键发送调整已刷入**：Codex Micro 与 OpenWatcher V2 共用的 Codex Micro 输入模式中，B 键松开动作已从原生 Voice Chat `ACT09` 改为原生 Send `ACT12`；短按和长按均在松开时发送一次，中心 `ACT12` 入口保留，Typeless/微信输入模式不变。语音门控回归、麦克风就绪回归、版本一致性检查和差异检查通过；ESP-IDF v5.5.4 全量构建通过，factory 应用镜像 4,121,696 字节，SHA-256 `2969d612585235403ce6fb8a20ae148c4466d39885b6afc5fba32dac9b132afc`。刷写前确认设备为 ESP32-S3、factory 为 6 MiB 且 `otadata` 为擦除态；已通过 `/dev/cu.usbmodem21201` 的 `app-flash` 只写入 `factory @ 0x20000`，写后 hash 和独立 `verify_flash` 都匹配，复读确认分区表和 `otadata` 未变。Mac 端虚拟麦克风和安全输出路由健康，刷写重启后 BLE 重连以及两套主题的实际按键/Codex 响应仍待用户验收。
 - **2026-10-12 后续 Typeless B 键行为修正已刷入，实机部分验收**：当前安装的 Bridge 输入模式为 `Typeless`，会同步到手表；因此上述仅在 `Codex Micro` 输入模式生效的原生 `ACT12` 不是用户之前看到 B 键触发语音的路径。按用户确认，保留 A→Typeless `F19`，Typeless 模式的 B 改为短按/长按松开均只发送一次配置的确认键（当前为 `Return`），不再在录音/识别时临时代替 A。微信模式和 Codex 原生模式保持各自现有逻辑；录音/识别中按 B 可能提前发送，推荐先用 A 结束并等文字出现。语音门控回归、麦克风就绪回归、版本一致性与差异检查通过；ESP-IDF v5.5.4 构建通过，factory 镜像 4,121,808 字节，SHA-256 `fe43602c0e848d12273f5462b291f5a96dc93e94e9ee50ee3a6961f143b903cc`。刷写前重核 `/dev/cu.usbmodem21201` 为 ESP32-S3、设备分区表与构建前缀一致、`factory @ 0x20000` 为 6 MiB 且 `otadata` 全擦除；只执行 `app-flash`，写后 hash 与独立 `verify_flash` 匹配，复读确认分区表和 `otadata` 未变。Bridge 重连后再次同步 `typeless` 模式并报告麦克风就绪、虚拟输出路由有效；Typeless 仍选中 `StopWatch Typeless Input`。用户已实测 OpenWatcher V2 的 A 录音流程和 B 短按：B 不再启动 Typeless，正常发送；Codex Micro 主题、B 长按仅发送一次、四 Agent、推理双向及 Radial 松手归中仍待此次镜像的实机验收。上一条已刷入镜像不包含此修正。
 - **2026-09-17 早先任务的构建与刷写记录**：从 Codex App 移除 Official V1 及其专属图片、逐帧宠物动画；原有 `official_v1` 设置回退到 Codex Micro。ESP-IDF 5.5.4 构建通过，应用镜像从 5,904,864 降至 4,025,456 字节，SHA-256 `8778bf86dfde834b6460f75e9774c9f41924b495eabfc1d1876bb1eae3a3cdf8`。当时设备分区表与构建完全一致、otadata 空白且从 factory 启动；仅执行 `app-flash` 并通过写后 hash 校验与串口启动、BLE 重新订阅。此后仓库已有新提交，不能把该哈希当成当前 HEAD 的构建产物；当时未安装本目录 Bridge、未改小智槽与持久数据分区。

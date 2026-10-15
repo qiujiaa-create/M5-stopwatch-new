@@ -1,10 +1,10 @@
 # StopWatch BLE Bridge
 
-Document version: 1.0. Last updated: 2026-10-12 18:24.
+Document version: 1.2. Last updated: 2026-10-15 20:24.
 
 StopWatch BLE Bridge is the macOS companion app for the M5 StopWatch Codex firmware.
 
-Current version: **v1.4.1**. Full version history: [CHANGELOG.md](CHANGELOG.md).
+Current version: **v1.4.2**. Full version history: [CHANGELOG.md](CHANGELOG.md).
 
 It provides local functions including:
 
@@ -78,6 +78,17 @@ during a Typeless recording, that dictation is interrupted and the user is asked
 to retry; recovery clears buffered audio and never automatically resumes the
 interrupted dictation. Logs report the expected UID and actual device ID.
 
+In v1.4.2, teardown closes the render entry gate and mutes the output, then
+waits for admitted callbacks to leave before stopping or disposing AUHAL. This
+avoids a Core Audio lock inversion between stopping the output and querying
+CurrentDevice inside its callback. Normal callbacks retain both route checks.
+Property listeners latch mute without recursively reading Core Audio properties.
+A stopped output cannot be rearmed; recovery builds and verifies a new output.
+
+If the watch shows `MIC LOST`, the current utterance is interrupted. Wait for
+Bridge/microphone readiness, then press A and record again. Quota push and native
+HID are separate paths: working task controls alone do not prove quota freshness.
+
 Regression tests (hardware tests require the installed M5 driver):
 
 ```bash
@@ -86,6 +97,9 @@ bash tools/typeless_bridge/tests/run_audio_route_tests.sh --hardware --loopback
 # Read-only audit of an installed Bridge process after its mic is enabled:
 bash tools/typeless_bridge/tests/run_audio_route_tests.sh --audit-pid <bridge-pid>
 ```
+
+The hardware tests include 24 stops with live render callbacks and confirm that
+system input, speakers and device sample rate remain unchanged.
 
 The loopback test sends only a synthetic signal to the M5 virtual output and
 measures its virtual input RMS. It neither records a physical microphone nor

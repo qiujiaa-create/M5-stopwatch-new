@@ -220,15 +220,40 @@ enum MicrophoneCoreAudio {
 /// if the device subsequently reappears. Never replay buffered speech on repair.
 final class MicrophoneRouteGate {
     let expectedDevice: AudioDeviceID
-    private let lock = NSLock()
+    private let lock = NSCondition()
     private var enabled = false
     private var faulted = false
+    private var stopping = false
+    private var activeRenders = 0
 
     init(device: AudioDeviceID) { expectedDevice = device }
-    func arm() { lock.lock(); defer { lock.unlock() }; enabled = !faulted }
+    func arm() { lock.lock(); defer { lock.unlock() }; enabled = !faulted && !stopping }
     func mute() { lock.lock(); defer { lock.unlock() }; enabled = false }
     func invalidate() { lock.lock(); defer { lock.unlock() }; enabled = false; faulted = true }
     var isFaulted: Bool { lock.lock(); defer { lock.unlock() }; return faulted }
+
+    func beginRender() -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard enabled && !faulted && !stopping else { return false }
+        activeRenders += 1
+        return true
+    }
+
+    func endRender() {
+        lock.lock(); defer { lock.unlock() }
+        activeRenders -= 1
+        if activeRenders == 0 { lock.broadcast() }
+    }
+
+    /// Drain callbacks BEFORE entering Core Audio's stop/dispose locks. An
+    /// admitted callback may be querying CurrentDevice on the same audio unit.
+    func stopAndDrain() {
+        lock.lock(); defer { lock.unlock() }
+        enabled = false
+        stopping = true
+        while activeRenders > 0 { lock.wait() }
+    }
+
     func permits(_ actual: AudioDeviceID?) -> Bool {
         lock.lock(); defer { lock.unlock() }
         guard actual == expectedDevice, expectedDevice != kAudioObjectUnknown else {
@@ -302,6 +327,12 @@ private let microphoneSourceCallback: AURenderCallback = { ref, _, _, _, frames,
 private let microphoneOutputCallback: AURenderCallback = { ref, flags, time, _, frames, data in
     guard let data else { return kAudio_ParamError }
     let context = Unmanaged<MicrophoneOutputContext>.fromOpaque(ref).takeUnretainedValue()
+    guard context.gate.beginRender() else {
+        silenceMicrophoneOutput(data)
+        flags.pointee.insert(.unitRenderAction_OutputIsSilence)
+        return noErr
+    }
+    defer { context.gate.endRender() }
     guard context.gate.permits(currentMicrophoneOutputDevice(context.outputUnit)),
           let converter = context.converterUnit else {
         silenceMicrophoneOutput(data)
@@ -323,13 +354,15 @@ private let microphoneOutputCallback: AURenderCallback = { ref, flags, time, _, 
 
 private let microphoneUnitRouteChanged: AudioUnitPropertyListenerProc = { ref, _, _, _, _ in
     let context = Unmanaged<MicrophoneOutputContext>.fromOpaque(ref).takeUnretainedValue()
-    if !context.routeMatches() { context.gate.invalidate() }
+    // Property listeners can run while Core Audio owns its internal locks.
+    // Latch mute immediately; validate the replacement outside the listener.
+    context.gate.invalidate()
 }
 
 private let microphoneDeviceChanged: AudioObjectPropertyListenerProc = { _, _, _, ref in
     guard let ref else { return noErr }
     let context = Unmanaged<MicrophoneOutputContext>.fromOpaque(ref).takeUnretainedValue()
-    if !context.routeMatches() { context.gate.invalidate() }
+    context.gate.invalidate()
     return noErr
 }
 
@@ -434,7 +467,7 @@ final class VirtualMicrophoneOutput {
     }
 
     func stop() {
-        context.gate.mute()
+        context.gate.stopAndDrain()
         let ref = Unmanaged.passUnretained(context).toOpaque()
         if let unit = context.outputUnit {
             AudioOutputUnitStop(unit)

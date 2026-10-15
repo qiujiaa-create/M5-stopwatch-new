@@ -1,6 +1,8 @@
 # StopWatch BLE microphone protocol
 
-Status: introduced in firmware v0.7.0 and updated for firmware v0.10.7 / StopWatch BLE Bridge v1.4.1. The v1.4.1 change adds a start-readiness handshake; the BLE audio packet format is unchanged.
+Document version: 1.1. Last updated: 2026-10-15 20:24.
+
+Status: introduced in firmware v0.7.0 and updated for firmware v0.10.7 / StopWatch BLE Bridge v1.4.2. Bridge v1.4.1 added the start-readiness handshake; v1.4.2 makes Core Audio output teardown safe during route changes. The BLE audio packet format is unchanged.
 
 The microphone is an additive service on the same bonded BLE connection used
 by HID and the existing Bridge service. It does not replace the full StopWatch
@@ -117,3 +119,18 @@ requires a new recording; rebuilding the output must not resume that utterance.
 Use the virtual device's existing 48 kHz format; the BLE source stays 16 kHz.
 Live switching to 16 kHz has a known silent-input case. Hardware tests and
 validation limits are documented in the [Bridge README](../tools/typeless_bridge/README.md#output-routing-safety-v136).
+
+## Output teardown and route recovery (Bridge v1.4.2)
+
+The render callback enters through a counted gate. Output teardown first closes
+that gate and mutes the route, waits for callbacks that already entered to
+finish, and only then stops and releases the audio unit. A callback rejected by
+the gate outputs silence and does not query `CurrentDevice`. Core Audio property
+listeners only latch the route fault; route inspection and output rebuilding run
+outside the listener callback. This avoids a lock inversion between
+`AudioOutputUnitStop` and a concurrent device query while retaining the real
+device checks before and after conversion.
+
+A route fault interrupts the current utterance. The Bridge can rebuild the
+virtual output and restore readiness, but the user must press A and record the
+utterance again. The interrupted audio is never joined to a later recording.

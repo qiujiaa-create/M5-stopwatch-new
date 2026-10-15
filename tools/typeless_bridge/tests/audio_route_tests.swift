@@ -86,6 +86,34 @@ enum AudioRouteTests {
         catch { print("FAIL: \(error.localizedDescription)"); exit(1) }
     }
 
+    static func testRenderDrain() {
+        let gate = MicrophoneRouteGate(device: 77)
+        require(!gate.beginRender(), "unarmed callback skips all audio unit access")
+        gate.arm()
+        require(gate.beginRender() && gate.beginRender(), "verified route admits in-flight callbacks")
+        let stopped = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            gate.stopAndDrain()
+            stopped.signal()
+        }
+        let deadline = Date().addingTimeInterval(2)
+        while gate.permits(77), Date() < deadline { Thread.sleep(forTimeInterval: 0.001) }
+        require(!gate.permits(77), "stop mutes before waiting for callbacks")
+        require(!gate.beginRender(), "stopping rejects new CurrentDevice queries")
+        gate.arm()
+        require(!gate.beginRender(), "stopping output cannot be rearmed")
+        require(stopped.wait(timeout: .now() + 0.03) == .timedOut, "Core Audio stop waits outside its locks while a callback is active")
+        gate.endRender()
+        require(stopped.wait(timeout: .now() + 0.03) == .timedOut, "every admitted callback must finish before disposal")
+        gate.endRender()
+        require(stopped.wait(timeout: .now() + 2) == .success, "teardown proceeds after the last callback exits")
+        gate.stopAndDrain()
+        require(!gate.beginRender(), "repeated teardown stays closed")
+        let fault = MicrophoneRouteGate(device: 77)
+        fault.arm(); fault.invalidate()
+        require(!fault.beginRender(), "route faults reject callbacks before audio unit access")
+    }
+
     static func run() throws {
         if let index = CommandLine.arguments.firstIndex(of: "--audit-pid") {
             guard CommandLine.arguments.indices.contains(index + 1),
@@ -125,6 +153,7 @@ enum AudioRouteTests {
         let muted = MicrophoneRouteGate(device: 77)
         muted.arm(); muted.mute()
         require(!muted.permits(77), "stopped output is muted")
+        testRenderDrain()
 
         guard CommandLine.arguments.contains("--hardware") else { return }
         guard let target = MicrophoneCoreAudio.virtualDevice() else { fatalError("Install M5 StopWatch Mic before hardware tests") }
@@ -150,6 +179,17 @@ enum AudioRouteTests {
             require(!output.health(now: Date()).healthy, "invalidated route reports unhealthy")
             output.stop(); output.stop()
             require(!output.health(now: Date()).engineRunning, "idempotent teardown stops IO")
+        }
+        // Do not invalidate first: the regression occurs when a live callback
+        // reads CurrentDevice at the same time the control thread stops AUHAL.
+        for cycle in 1...24 {
+            let output = try VirtualMicrophoneOutput(ring: ring, device: target.output)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.08))
+            require(output.health(now: Date()).renderCount > 0, "active stop cycle \(cycle) has rendered callbacks")
+            let started = Date()
+            output.stop()
+            require(Date().timeIntervalSince(started) < 1, "active stop cycle \(cycle) completes without deadlock")
+            require(!output.health(now: Date()).engineRunning, "active stop cycle \(cycle) releases IO")
         }
         require(MicrophoneCoreAudio.defaultInput() == defaultInputBefore, "output tests preserve system input")
         require(propertyIDs(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice) == defaultOutputBefore, "output tests preserve system speakers")
