@@ -32,17 +32,6 @@ constexpr uint32_t kOwSoftText   = 0xADB9CC;
 constexpr uint32_t kOwTrack      = 0x1E2A3C;
 constexpr uint32_t kOwStatusIdle = 0x7895B2;
 constexpr uint32_t kOwAlert      = 0xFF405C;
-constexpr uint32_t kMicroBackground = 0x000000;
-constexpr uint32_t kMicroPanel      = 0x111820;
-constexpr uint32_t kMicroPanelDown  = 0x1D2935;
-constexpr uint32_t kMicroText       = 0xE8EEF5;
-constexpr uint32_t kMicroMuted      = 0x7D8A98;
-constexpr uint32_t kMicroTrack      = 0x26323D;
-constexpr uint32_t kMicroAccent     = 0x12D6B2;
-constexpr uint32_t kMicroWarning    = 0xFFB44A;
-constexpr uint32_t kMicroDanger     = 0xFF5D6C;
-constexpr uint32_t kMicroSession    = 0x4292F5;
-constexpr uint32_t kMicroWeeklyText = 0x5FD8C0;
 constexpr uint32_t kActionWheelHoldMs = 280;
 constexpr uint32_t kActionWheelFrameMs = 33;
 constexpr int kActionWheelStartRadius = 72;
@@ -59,15 +48,6 @@ constexpr uint32_t kNativeWorkingColor = 0x304FFE;
 // bridge (the bridge refreshes quota every 300 s; a closed Codex client stops
 // panel pushes, so this timeout is what downgrades LIVE to BLE ONLY).
 constexpr uint32_t kCodexLiveTimeoutMs = 360000;
-// Periodic full-dial repaint that recovers phantom rectangles behind the
-// A1-A6 agent labels (screen pixels going stale relative to the LVGL state).
-constexpr uint32_t kMicroSelfHealIntervalMs = 30000;
-constexpr int kMicroCenterX = 233;
-constexpr int kMicroCenterY = 237;
-constexpr int kMicroAgentRadius = 56;
-constexpr int kMicroDialRadius = 104;
-constexpr int kMicroSessionDialRadius = kMicroDialRadius - 12;
-constexpr int kMicroSwipeThreshold = 32;
 constexpr int kReasoningTouchMinX = 120;
 constexpr int kReasoningTouchMaxX = 346;
 constexpr int kReasoningTouchMinY = 28;
@@ -77,14 +57,6 @@ struct NativeAgentPoint {
     int x;
     int y;
 };
-constexpr std::array<NativeAgentPoint, 6> kMicroAgentCenters = {{
-    {233, 72},
-    {375, 154},
-    {375, 318},
-    {233, 400},
-    {91, 318},
-    {91, 154},
-}};
 constexpr std::array<NativeAgentPoint, 4> kNativeAgentCenters = {{
     {99, 367},
     {184, 417},
@@ -127,57 +99,6 @@ uint32_t blendRgb(uint32_t from, uint32_t to, float amount)
     const uint32_t green = blend_channel((from >> 8) & 0xFF, (to >> 8) & 0xFF);
     const uint32_t blue = blend_channel(from & 0xFF, to & 0xFF);
     return (red << 16) | (green << 8) | blue;
-}
-
-uint32_t scaleRgb(uint32_t color, float brightness)
-{
-    const float value = std::clamp(brightness, 0.0f, 1.0f);
-    const uint32_t red = static_cast<uint32_t>(std::lround(((color >> 16) & 0xFF) * value));
-    const uint32_t green = static_cast<uint32_t>(std::lround(((color >> 8) & 0xFF) * value));
-    const uint32_t blue = static_cast<uint32_t>(std::lround((color & 0xFF) * value));
-    return (red << 16) | (green << 8) | blue;
-}
-
-enum class MicroAgentStatus : uint8_t {
-    Unassigned,
-    Idle,
-    Thinking,
-    Complete,
-    RequiresInput,
-    Error,
-    Active,
-};
-
-MicroAgentStatus classifyMicroAgent(const CodexView::NativeAgentState& agent)
-{
-    if (!agent.assigned || agent.brightness <= 0.01f) {
-        return MicroAgentStatus::Unassigned;
-    }
-    const int red = static_cast<int>((agent.color >> 16) & 0xFF);
-    const int green = static_cast<int>((agent.color >> 8) & 0xFF);
-    const int blue = static_cast<int>(agent.color & 0xFF);
-    const int maximum = std::max({red, green, blue});
-    const int minimum = std::min({red, green, blue});
-    if (maximum - minimum < 48 && maximum > 150) return MicroAgentStatus::Idle;
-    if (green > red * 1.12f && green > blue * 1.15f) return MicroAgentStatus::Complete;
-    if (blue > red * 1.12f && blue > green * 1.05f) return MicroAgentStatus::Thinking;
-    if (red > 150 && green > 70 && green > blue * 1.45f) return MicroAgentStatus::RequiresInput;
-    if (red > green * 1.20f && red > blue * 1.20f) return MicroAgentStatus::Error;
-    return MicroAgentStatus::Active;
-}
-
-uint32_t microAgentFill(const CodexView::NativeAgentState& agent)
-{
-    switch (classifyMicroAgent(agent)) {
-    case MicroAgentStatus::Idle: return 0xB7C2CD;
-    case MicroAgentStatus::Thinking: return 0x4292F5;
-    case MicroAgentStatus::Complete: return 0x2BC96E;
-    case MicroAgentStatus::RequiresInput: return 0xF7AC42;
-    case MicroAgentStatus::Error: return 0xF55A68;
-    case MicroAgentStatus::Active: return agent.color;
-    case MicroAgentStatus::Unassigned:
-    default: return kMicroPanel;
-    }
 }
 
 constexpr bool pointInsideNativeAgentRail(int x, int y)
@@ -262,12 +183,11 @@ uint32_t activity_heat_color(float activity)
 
 }  // namespace
 
-void CodexView::init(lv_obj_t* parent, ThemeMode themeMode)
+void CodexView::init(lv_obj_t* parent)
 {
-    _theme_mode = themeMode;
     lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(parent,
-                              lv_color_hex(_theme_mode == ThemeMode::OpenWatcherV2 ? kOwBackground : kMicroBackground),
+                              lv_color_hex(kOwBackground),
                               LV_PART_MAIN);
 
     _state.weekly   = {1.0f, 1.0f, "--"};
@@ -279,35 +199,27 @@ void CodexView::init(lv_obj_t* parent, ThemeMode themeMode)
     _panel->setRadius(0);
     _panel->setBorderWidth(0);
     _panel->setPaddingAll(0);
-    _panel->setBgColor(lv_color_hex(_theme_mode == ThemeMode::OpenWatcherV2 ? kOwBackground : kMicroBackground));
+    _panel->setBgColor(lv_color_hex(kOwBackground));
     _panel->setBgOpa(LV_OPA_COVER);
     _panel->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
 
-    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
-        initCodexMicroDashboard();
-    } else {
-        initOpenWatcherV2();
-    }
+    initOpenWatcherV2();
 
     _message_label = std::make_unique<Label>(_panel->get());
     _message_label->setText(_state.message.c_str());
     _message_label->setTextFont(&lv_font_montserrat_18);
-    _message_label->setTextColor(lv_color_hex(_theme_mode == ThemeMode::OpenWatcherV2
-                                                  ? kOwSoftText
-                                                  : kMicroAccent));
+    _message_label->setTextColor(lv_color_hex(kOwSoftText));
     _message_label->setWidth(260);
     _message_label->setLongMode(LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
     _message_label->setTextAlign(LV_TEXT_ALIGN_CENTER);
     _message_label->align(LV_ALIGN_TOP_MID,
                           0,
-                          _theme_mode == ThemeMode::CodexMicroDashboard ? 292 : 354);
+                          354);
     if (_message_label) {
         _message_label->setHidden(true);
     }
 
-    if (_theme_mode != ThemeMode::CodexMicroDashboard) {
-        initVoiceWaveform();
-    }
+    initVoiceWaveform();
 
     _ble_dot = std::make_unique<Container>(_panel->get());
     _ble_dot->setSize(8, 8);
@@ -315,7 +227,6 @@ void CodexView::init(lv_obj_t* parent, ThemeMode themeMode)
     _ble_dot->setBorderWidth(0);
     _ble_dot->setBgColor(lv_color_hex(0x2F79FF));
     _ble_dot->align(LV_ALIGN_BOTTOM_MID, -7, -22);
-    _ble_dot->setHidden(_theme_mode == ThemeMode::CodexMicroDashboard);
 
     _wifi_dot = std::make_unique<Container>(_panel->get());
     _wifi_dot->setSize(8, 8);
@@ -323,61 +234,18 @@ void CodexView::init(lv_obj_t* parent, ThemeMode themeMode)
     _wifi_dot->setBorderWidth(0);
     _wifi_dot->setBgColor(lv_color_hex(0x38E07D));
     _wifi_dot->align(LV_ALIGN_BOTTOM_MID, 7, -22);
-    _wifi_dot->setHidden(_theme_mode == ThemeMode::CodexMicroDashboard);
 
-    if (_theme_mode != ThemeMode::CodexMicroDashboard) {
-        initActionWheel();
-        initTaskList();
-        initReasoningControl();
-    }
+    initActionWheel();
+    initTaskList();
+    initReasoningControl();
 
     updateConnectionDots();
-    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
-        updateCodexMicroDashboardLabels();
-    } else {
-        updateOpenWatcherV2Labels();
-    }
+    updateOpenWatcherV2Labels();
     GetHAL().updateImuData();
 }
 
 void CodexView::update()
 {
-    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
-        updateCodexMicroDashboardTouch();
-        const uint32_t now = GetHAL().millis();
-        bool transient_changed = false;
-        if (_state.messageExpiresAtMs != 0 && now > _state.messageExpiresAtMs) {
-            _state.messageExpiresAtMs = 0;
-            _state.message.clear();
-            transient_changed = true;
-        }
-        if (_micro_completed_until_ms != 0 && now > _micro_completed_until_ms) {
-            _micro_completed_until_ms = 0;
-            _micro_completed_agent = -1;
-            transient_changed = true;
-        }
-        // CODEX LIVE decays on a timer, not on a push — detect the flip here
-        // so the health label downgrades without waiting for new data.
-        const bool live_now = codexLiveActive();
-        if (live_now != _micro_last_live_state) {
-            _micro_last_live_state = live_now;
-            transient_changed = true;
-        }
-        // Self-heal: periodically force a full repaint of the dial. Recovery
-        // for phantom rectangles behind the A1-A6 labels — the screen can end
-        // up showing stale pixels that LVGL no longer considers dirty; a tap
-        // used to be the only way to force the repaint.
-        if (now - _micro_last_selfheal_ms >= kMicroSelfHealIntervalMs) {
-            _micro_last_selfheal_ms = now;
-            if (_micro_canvas) {
-                lv_obj_invalidate(_micro_canvas->get());
-            }
-        }
-        if (transient_changed) {
-            updateCodexMicroDashboardLabels();
-        }
-        return;
-    }
     if (_task_list_active) {
         return;
     }
@@ -483,16 +351,9 @@ void CodexView::applySnapshot(const codex::QuotaSnapshot& snapshot)
                                    previous_activity_buckets != _state.activityBuckets;
 
     updateConnectionDots();
-    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
-        updateCodexMicroDashboardLabels();
-        if (_micro_canvas) {
-            lv_obj_invalidate(_micro_canvas->get());
-        }
-    } else {
-        updateOpenWatcherV2Labels();
-        if (v2_canvas_changed && _v2_canvas) {
-            lv_obj_invalidate(_v2_canvas->get());
-        }
+    updateOpenWatcherV2Labels();
+    if (v2_canvas_changed && _v2_canvas) {
+        lv_obj_invalidate(_v2_canvas->get());
     }
     setMessageText(snapshot.message);
 }
@@ -503,10 +364,6 @@ void CodexView::applyBleState(bool connected, const std::string& hostMessage, bo
         _state.bleConnected = connected;
         updateConnectionDots();
         updateOpenWatcherV2Labels();
-        updateCodexMicroDashboardLabels();
-        if (_micro_canvas) {
-            lv_obj_invalidate(_micro_canvas->get());
-        }
     }
 
     if (hostMessageChanged && !hostMessage.empty()) {
@@ -548,9 +405,7 @@ void CodexView::setUnreadTaskCount(int count)
 {
     _state.unreadStateValid = true;
     _state.unreadTaskCount = std::max(count, 0);
-    if (_theme_mode == ThemeMode::OpenWatcherV2) {
-        updateOpenWatcherV2Labels();
-    }
+    updateOpenWatcherV2Labels();
 }
 
 void CodexView::setUnreadTasks(const std::vector<TaskItem>& tasks)
@@ -563,42 +418,11 @@ void CodexView::setNativeAgentStates(bool ready,
                                      bool communicating,
                                      const std::array<NativeAgentState, 6>& agents)
 {
-    if (_native_agents_observed && _theme_mode == ThemeMode::CodexMicroDashboard) {
-        for (size_t index = 0; index < agents.size(); ++index) {
-            if (classifyMicroAgent(_native_agents[index]) != MicroAgentStatus::Complete &&
-                classifyMicroAgent(agents[index]) == MicroAgentStatus::Complete) {
-                _micro_completed_agent = static_cast<int>(index);
-                _micro_completed_until_ms = GetHAL().millis() + 2200;
-                GetHAL().vibrate(70, 90);
-            }
-        }
-    }
     _native_agents_ready = ready;
     _native_codex_communicating = communicating;
     _native_agents = agents;
-    _native_agents_observed = true;
     updateNativeAgentRail(true);
     updateOpenWatcherV2Labels();
-    updateCodexMicroDashboardLabels();
-}
-
-void CodexView::setBatteryState(int percent, bool charging)
-{
-    // Battery no longer renders on the dial face; the top swipe status bar
-    // owns battery display. Keep the state for future consumers.
-    percent = std::clamp(percent, 0, 100);
-    _battery_percent = percent;
-    _battery_charging = charging;
-}
-
-void CodexView::setPhysicalControlState(bool leftPressed, bool rightPressed)
-{
-    if (_micro_left_pressed == leftPressed && _micro_right_pressed == rightPressed) {
-        return;
-    }
-    _micro_left_pressed = leftPressed;
-    _micro_right_pressed = rightPressed;
-    updateCodexMicroDashboardLabels();
 }
 
 void CodexView::showTaskList()
@@ -681,8 +505,7 @@ void CodexView::setVoiceMode(VoiceMode mode)
                 _state.message.clear();
                 _message_label->setText("");
             }
-            _message_label->setTextColor(lv_color_hex(_theme_mode == ThemeMode::OpenWatcherV2
-                                                          ? kOwSoftText : kMicroAccent));
+            _message_label->setTextColor(lv_color_hex(kOwSoftText));
             _message_label->setHidden(visible);
         }
     }
@@ -690,33 +513,18 @@ void CodexView::setVoiceMode(VoiceMode mode)
         setHiddenIfChanged(*_v2_sync_indicator, visible || mode == VoiceMode::Interrupted);
     }
     updateOpenWatcherV2Labels();
-    updateCodexMicroDashboardLabels();
-    if (_micro_canvas) {
-        lv_obj_invalidate(_micro_canvas->get());
-    }
 }
 
 uint32_t CodexView::frameIntervalMs() const
 {
-    if (_action_touch_tracking || _action_wheel_active || _reasoning_touch_tracking ||
-        _native_agent_touch_tracking || _micro_touch_tracking) {
-        return kActionWheelFrameMs;
-    }
-    if (_task_list_active) {
-        return 100;
-    }
-    if (_theme_mode == ThemeMode::OpenWatcherV2) {
-        return 100;
-    }
-    if (_theme_mode == ThemeMode::CodexMicroDashboard) {
-        return 100;
-    }
-    return 100;
+    // Poll reasoning and center gestures every frame, including the first
+    // touch. Widgets still use differential updates to avoid full repaints.
+    return _task_list_active ? 100 : kActionWheelFrameMs;
 }
 
 bool CodexView::hasExecutingNativeAgent() const
 {
-    if (_theme_mode != ThemeMode::OpenWatcherV2 || !_native_agents_ready) {
+    if (!_native_agents_ready) {
         return false;
     }
     const size_t visible_slots = std::min(kNativeAgentCenters.size(), _native_agents.size());
@@ -1318,72 +1126,6 @@ void CodexView::drawReasoningControl(lv_layer_t* layer, const lv_area_t& coords)
     lv_draw_arc(layer, &arc);
 }
 
-void CodexView::initCodexMicroDashboard()
-{
-    _micro_canvas = std::make_unique<Container>(_panel->get());
-    _micro_canvas->setSize(kScreenSize, kScreenSize);
-    _micro_canvas->align(LV_ALIGN_CENTER, 0, 0);
-    _micro_canvas->setBgOpa(LV_OPA_TRANSP);
-    _micro_canvas->setBorderWidth(0);
-    _micro_canvas->setPaddingAll(0);
-    _micro_canvas->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
-    _micro_canvas->removeFlag(LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(_micro_canvas->get(),
-                        &CodexView::drawCodexMicroDashboardEvent,
-                        LV_EVENT_DRAW_MAIN_BEGIN,
-                        this);
-
-    auto make_center_label = [this](std::unique_ptr<Label>& target,
-                                    const char* text,
-                                    const lv_font_t* font,
-                                    uint32_t color,
-                                    int y,
-                                    int width) {
-        target = std::make_unique<Label>(_panel->get());
-        target->setText(text);
-        target->setTextFont(font);
-        target->setTextColor(lv_color_hex(color));
-        target->setWidth(width);
-        target->setTextAlign(LV_TEXT_ALIGN_CENTER);
-        target->align(LV_ALIGN_TOP_MID, 0, y);
-        target->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
-        target->setBgOpa(LV_OPA_TRANSP);
-        target->setBorderWidth(0);
-    };
-
-    make_center_label(_micro_health_label, "OFFLINE", &lv_font_montserrat_16,
-                      kMicroDanger, 157, 180);
-    make_center_label(_micro_caption_label, "WAITING CODEX", &lv_font_montserrat_14,
-                      kMicroMuted, 187, 190);
-    make_center_label(_micro_quota_label, "--", &lv_font_montserrat_48,
-                      kMicroText, 207, 170);
-    make_center_label(_micro_reset_label, "NO QUOTA DATA", &lv_font_montserrat_14,
-                      kMicroMuted, 267, 190);
-    make_center_label(_micro_weekly_label, "WK --", &lv_font_montserrat_14,
-                      kMicroMuted, 292, 190);
-    make_center_label(_micro_transient_label, "", &lv_font_montserrat_18,
-                      kMicroAccent, 226, 210);
-    _micro_transient_label->setHidden(true);
-
-    for (size_t index = 0; index < _micro_agent_labels.size(); ++index) {
-        auto label = std::make_unique<Label>(_panel->get());
-        char text[4] = {};
-        std::snprintf(text, sizeof(text), "A%u", static_cast<unsigned>(index + 1));
-        label->setText(text);
-        label->setTextFont(&lv_font_montserrat_20);
-        label->setTextColor(lv_color_hex(kMicroMuted));
-        label->setWidth(72);
-        label->setTextAlign(LV_TEXT_ALIGN_CENTER);
-        label->align(LV_ALIGN_TOP_LEFT,
-                     kMicroAgentCenters[index].x - 36,
-                     kMicroAgentCenters[index].y - 13);
-        label->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
-        label->setBgOpa(LV_OPA_TRANSP);
-        label->setBorderWidth(0);
-        _micro_agent_labels[index] = std::move(label);
-    }
-}
-
 bool CodexView::codexLiveActive() const
 {
     // The host-RPC flag alone stays true as long as the bridge process is
@@ -1397,346 +1139,6 @@ bool CodexView::codexLiveActive() const
         return false;
     }
     return (GetHAL().millis() - _last_quota_update_tick) < kCodexLiveTimeoutMs;
-}
-
-void CodexView::updateCodexMicroDashboardLabels()
-{
-    if (_theme_mode != ThemeMode::CodexMicroDashboard || !_micro_health_label) {
-        return;
-    }
-
-    const bool link_present = _native_agents_ready || _state.bleConnected;
-    const bool codex_live = codexLiveActive();
-    const char* health = codex_live
-                             ? "CODEX LIVE"
-                             : (link_present ? "BLE ONLY" : "OFFLINE");
-    const uint32_t health_color = codex_live
-                                      ? kMicroAccent
-                                      : (link_present ? 0x4292F5 : kMicroDanger);
-    setLabelTextIfChanged(*_micro_health_label, health);
-    _micro_health_label->setTextColor(lv_color_hex(health_color));
-
-    const bool session_valid = _state.session5hLeftPct >= 0;
-    // Caption always speaks the 5h language. When 5h is not synced we say so
-    // explicitly ("WAITING 5H") instead of relabeling the dial as weekly.
-    const char* caption;
-    if (_state.stale) {
-        caption = "SYNC STALE";
-    } else if (!link_present) {
-        caption = "WAITING CODEX";
-    } else if (!session_valid) {
-        caption = "WAITING 5H";
-    } else {
-        caption = "5H LEFT";
-    }
-    setLabelTextIfChanged(*_micro_caption_label, caption);
-    _micro_caption_label->setTextColor(lv_color_hex(_state.stale ? kMicroWarning : kMicroMuted));
-
-    const int week_pct = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
-    // The center number shows the 5h session remaining only. Weekly quota is a
-    // slow variable with different semantics and must never stand in for 5h;
-    // when 5h is not synced, show "--" and a clear waiting message instead.
-    if (session_valid) {
-        setLabelTextIfChanged(*_micro_quota_label,
-                              std::to_string(_state.session5hLeftPct) + "%");
-        setLabelTextIfChanged(*_micro_reset_label,
-                              std::string("RESET ") +
-                                  (_state.session5hResetLabel.empty()
-                                       ? "--"
-                                       : _state.session5hResetLabel));
-    } else {
-        setLabelTextIfChanged(*_micro_quota_label, "--");
-        setLabelTextIfChanged(*_micro_reset_label,
-                              _state.stale ? "CHECK COMPANION"
-                                           : (link_present ? "WAITING 5H" : "NO QUOTA DATA"));
-    }
-    const bool session_low = session_valid && _state.session5hLeftPct <= 20;
-    _micro_quota_label->setTextColor(
-        lv_color_hex(_state.stale ? kMicroMuted
-                                  : (session_valid
-                                         ? (session_low ? kMicroWarning : kMicroText)
-                                         : kMicroMuted)));
-
-    if (_state.quotaValid) {
-        const std::string weekly_line =
-            "WK " + std::to_string(week_pct) + "% - " +
-            (_state.weekly.resetInLabel.empty() ? "--" : _state.weekly.resetInLabel);
-        setLabelTextIfChanged(*_micro_weekly_label, weekly_line);
-        _micro_weekly_label->setTextColor(lv_color_hex(_state.stale ? kMicroMuted
-                                                                     : kMicroWeeklyText));
-    } else {
-        setLabelTextIfChanged(*_micro_weekly_label, "WK --");
-        _micro_weekly_label->setTextColor(lv_color_hex(kMicroMuted));
-    }
-
-    const char* transient = nullptr;
-    uint32_t transient_color = kMicroAccent;
-    char completed[24] = {};
-    if (_voice_mode == VoiceMode::Interrupted) {
-        transient = "MIC LOST - PRESS A";
-        transient_color = kMicroDanger;
-    } else if (_micro_left_pressed || _voice_mode == VoiceMode::Recording) {
-        transient = "LISTENING";
-    } else if (_micro_right_pressed) {
-        transient = "VOICE CHAT";
-    } else if (_micro_send_candidate) {
-        transient = "SEND";
-        transient_color = kMicroText;
-    } else if (_micro_swipe_direction >= 0) {
-        static constexpr std::array<const char*, 4> kSwipe = {
-            "STICK / UP", "STICK / RIGHT", "STICK / DOWN", "STICK / LEFT"};
-        transient = kSwipe[static_cast<size_t>(_micro_swipe_direction)];
-    } else if (_voice_mode == VoiceMode::Processing || _state.processing) {
-        transient = "PROCESSING";
-        transient_color = kMicroWarning;
-    } else if (_micro_completed_agent >= 0) {
-        std::snprintf(completed, sizeof(completed), "A%d DONE", _micro_completed_agent + 1);
-        transient = completed;
-    } else if (!_state.message.empty()) {
-        transient = _state.message.c_str();
-    }
-    if (transient) {
-        setLabelTextIfChanged(*_micro_transient_label, transient);
-        _micro_transient_label->setTextColor(lv_color_hex(transient_color));
-        setHiddenIfChanged(*_micro_transient_label, false);
-    } else {
-        setHiddenIfChanged(*_micro_transient_label, true);
-    }
-
-    for (size_t index = 0; index < _micro_agent_labels.size(); ++index) {
-        const auto& agent = _native_agents[index];
-        const uint32_t fill = microAgentFill(agent);
-        const int red = static_cast<int>((fill >> 16) & 0xFF);
-        const int green = static_cast<int>((fill >> 8) & 0xFF);
-        const int blue = static_cast<int>(fill & 0xFF);
-        const int luminance = (red * 77 + green * 150 + blue * 29) >> 8;
-        _micro_agent_labels[index]->setTextColor(
-            lv_color_hex(classifyMicroAgent(agent) == MicroAgentStatus::Unassigned
-                             ? kMicroMuted
-                             : (luminance > 150 ? 0x0D1218 : kMicroText)));
-    }
-
-    if (_message_label) {
-        _message_label->setHidden(true);
-    }
-}
-
-int CodexView::codexMicroAgentAt(int x, int y) const
-{
-    for (size_t index = 0; index < kMicroAgentCenters.size(); ++index) {
-        const int dx = x - kMicroAgentCenters[index].x;
-        const int dy = y - kMicroAgentCenters[index].y;
-        if (dx * dx + dy * dy <= (kMicroAgentRadius + 4) * (kMicroAgentRadius + 4)) {
-            return static_cast<int>(index);
-        }
-    }
-    return -1;
-}
-
-void CodexView::updateCodexMicroDashboardTouch()
-{
-    lv_indev_t* indev = GetHAL().lvTouchpad;
-    if (!indev) {
-        return;
-    }
-    const lv_indev_state_t state = lv_indev_get_state(indev);
-    lv_point_t point = {0, 0};
-    lv_indev_get_point(indev, &point);
-    const uint32_t now = GetHAL().millis();
-
-    if (state == LV_INDEV_STATE_PR) {
-        if (!_micro_touch_tracking) {
-            _micro_touch_tracking = true;
-            _micro_touch_start_x = point.x;
-            _micro_touch_start_y = point.y;
-            _native_agent_touch_candidate = codexMicroAgentAt(point.x, point.y);
-            _native_agent_touch_started_at = now;
-            _native_agent_touch_committed = false;
-            const int center_dx = point.x - kMicroCenterX;
-            const int center_dy = point.y - kMicroCenterY;
-            _micro_send_candidate = _native_agent_touch_candidate < 0 &&
-                                    center_dx * center_dx + center_dy * center_dy <=
-                                        kMicroDialRadius * kMicroDialRadius;
-            _micro_swipe_active = false;
-            _micro_swipe_direction = -1;
-            GetHAL().vibrate(14, 35);
-            updateCodexMicroDashboardLabels();
-            if (_micro_canvas) {
-                lv_obj_invalidate(_micro_canvas->get());
-            }
-            return;
-        }
-
-        const int dx = point.x - _micro_touch_start_x;
-        const int dy = point.y - _micro_touch_start_y;
-        if (!_micro_swipe_active && dx * dx + dy * dy >= kMicroSwipeThreshold * kMicroSwipeThreshold) {
-            _micro_swipe_active = true;
-            _micro_send_candidate = false;
-            _native_agent_touch_candidate = -1;
-            if (std::abs(dx) >= std::abs(dy)) {
-                _micro_swipe_direction = dx >= 0 ? 1 : 3;
-            } else {
-                _micro_swipe_direction = dy >= 0 ? 2 : 0;
-            }
-            static constexpr std::array<float, 4> kAngles = {0.75f, 0.0f, 0.25f, 0.5f};
-            queueNativeRadial(kAngles[static_cast<size_t>(_micro_swipe_direction)], 1.0f);
-            GetHAL().vibrate(24, 55);
-        }
-
-        if (!_micro_swipe_active && _native_agent_touch_candidate >= 0 &&
-            !_native_agent_touch_committed &&
-            now - _native_agent_touch_started_at >= kNativeAgentHoldMs) {
-            _native_agent_touch_committed = true;
-            _native_agent_slot_request = _native_agent_touch_candidate;
-            GetHAL().vibrate(35, 75);
-        }
-        updateCodexMicroDashboardLabels();
-        if (_micro_canvas) {
-            lv_obj_invalidate(_micro_canvas->get());
-        }
-        return;
-    }
-
-    if (!_micro_touch_tracking) {
-        return;
-    }
-    if (_micro_swipe_active) {
-        static constexpr std::array<float, 4> kAngles = {0.75f, 0.0f, 0.25f, 0.5f};
-        queueNativeRadial(kAngles[static_cast<size_t>(_micro_swipe_direction)], 0.0f);
-    } else if (_micro_send_candidate) {
-        _native_action_request = 12;
-        GetHAL().vibrate(35, 75);
-    }
-    _micro_touch_tracking = false;
-    _micro_send_candidate = false;
-    _micro_swipe_active = false;
-    _micro_swipe_direction = -1;
-    _native_agent_touch_candidate = -1;
-    _native_agent_touch_committed = false;
-    updateCodexMicroDashboardLabels();
-    if (_micro_canvas) {
-        lv_obj_invalidate(_micro_canvas->get());
-    }
-}
-
-void CodexView::drawCodexMicroDashboardEvent(lv_event_t* event)
-{
-    auto* view = static_cast<CodexView*>(lv_event_get_user_data(event));
-    if (!view || lv_event_get_code(event) != LV_EVENT_DRAW_MAIN_BEGIN) {
-        return;
-    }
-    lv_obj_t* obj = lv_event_get_target_obj(event);
-    lv_layer_t* layer = lv_event_get_layer(event);
-    lv_area_t coords;
-    lv_obj_get_coords(obj, &coords);
-    view->drawCodexMicroDashboard(layer, coords);
-}
-
-void CodexView::drawCodexMicroDashboard(lv_layer_t* layer, const lv_area_t& coords)
-{
-    lv_draw_arc_dsc_t arc;
-    lv_draw_arc_dsc_init(&arc);
-    arc.center = {static_cast<lv_coord_t>(coords.x1 + kMicroCenterX),
-                  static_cast<lv_coord_t>(coords.y1 + kMicroCenterY)};
-    arc.rounded = 1;
-
-    // Outer ring: weekly quota (teal), track first.
-    arc.radius = kMicroDialRadius;
-    arc.width = 8;
-    arc.start_angle = 0;
-    arc.end_angle = 360;
-    arc.color = lv_color_hex(kMicroTrack);
-    arc.opa = 255;
-    lv_draw_arc(layer, &arc);
-
-    if (_state.quotaValid) {
-        const float remaining = remainingRatio(_state.weekly);
-        const int end_angle = 270 + static_cast<int>(std::lround(360.0f * remaining));
-        arc.start_angle = 270;
-        arc.end_angle = end_angle;
-        arc.color = lv_color_hex(_state.stale
-                                     ? 0x745527
-                                     : (remaining > 0.20f ? kMicroAccent : kMicroWarning));
-        arc.opa = 255;
-        lv_draw_arc(layer, &arc);
-    }
-
-    // Inner ring: 5h session quota (blue), only when the bridge provides it.
-    arc.radius = kMicroSessionDialRadius;
-    arc.width = 8;
-    arc.start_angle = 0;
-    arc.end_angle = 360;
-    arc.color = lv_color_hex(kMicroTrack);
-    arc.opa = 200;
-    lv_draw_arc(layer, &arc);
-
-    if (_state.session5hLeftPct >= 0) {
-        const float session_remaining =
-            static_cast<float>(std::clamp(_state.session5hLeftPct, 0, 100)) / 100.0f;
-        const int end_angle = 270 + static_cast<int>(std::lround(360.0f * session_remaining));
-        arc.start_angle = 270;
-        arc.end_angle = end_angle;
-        arc.color = lv_color_hex(_state.stale
-                                     ? 0x745527
-                                     : (session_remaining > 0.20f ? kMicroSession
-                                                                   : kMicroWarning));
-        arc.opa = 255;
-        lv_draw_arc(layer, &arc);
-    }
-
-    lv_draw_rect_dsc_t rect;
-    lv_draw_rect_dsc_init(&rect);
-    rect.radius = LV_RADIUS_CIRCLE;
-    rect.border_width = 0;
-    for (size_t index = 0; index < kMicroAgentCenters.size(); ++index) {
-        const auto& agent = _native_agents[index];
-        const bool active = _native_agents_ready && agent.assigned && agent.brightness > 0.01f;
-        const bool pressed = _micro_touch_tracking &&
-                             _native_agent_touch_candidate == static_cast<int>(index);
-        const uint32_t fill = active ? microAgentFill(agent) : kMicroPanel;
-        const float brightness = active ? std::clamp(agent.brightness, 0.18f, 1.0f) : 1.0f;
-        lv_area_t outer = {
-            static_cast<lv_coord_t>(coords.x1 + kMicroAgentCenters[index].x - kMicroAgentRadius),
-            static_cast<lv_coord_t>(coords.y1 + kMicroAgentCenters[index].y - kMicroAgentRadius),
-            static_cast<lv_coord_t>(coords.x1 + kMicroAgentCenters[index].x + kMicroAgentRadius),
-            static_cast<lv_coord_t>(coords.y1 + kMicroAgentCenters[index].y + kMicroAgentRadius),
-        };
-        rect.bg_color = lv_color_hex(active ? scaleRgb(fill, brightness * 0.55f) : kMicroTrack);
-        rect.bg_opa = 255;
-        lv_draw_rect(layer, &rect, &outer);
-        lv_area_t inner = {
-            static_cast<lv_coord_t>(outer.x1 + 4),
-            static_cast<lv_coord_t>(outer.y1 + 4),
-            static_cast<lv_coord_t>(outer.x2 - 4),
-            static_cast<lv_coord_t>(outer.y2 - 4),
-        };
-        rect.bg_color = lv_color_hex(active
-                                         ? scaleRgb(fill, brightness * (pressed ? 0.72f : 1.0f))
-                                         : (pressed ? kMicroPanelDown : kMicroPanel));
-        lv_draw_rect(layer, &rect, &inner);
-
-        if (pressed && !_native_agent_touch_committed) {
-            lv_draw_arc_dsc_t hold;
-            lv_draw_arc_dsc_init(&hold);
-            hold.center = {
-                static_cast<lv_coord_t>(coords.x1 + kMicroAgentCenters[index].x),
-                static_cast<lv_coord_t>(coords.y1 + kMicroAgentCenters[index].y),
-            };
-            hold.radius = kMicroAgentRadius + 3;
-            hold.width = 4;
-            hold.rounded = 1;
-            hold.start_angle = 270;
-            const float progress = std::clamp(
-                static_cast<float>(GetHAL().millis() - _native_agent_touch_started_at) /
-                    static_cast<float>(kNativeAgentHoldMs),
-                0.0f,
-                1.0f);
-            hold.end_angle = 270 + static_cast<int>(std::lround(360.0f * progress));
-            hold.color = lv_color_hex(kMicroText);
-            hold.opa = 255;
-            lv_draw_arc(layer, &hold);
-        }
-    }
 }
 
 void CodexView::initOpenWatcherV2()
@@ -1891,10 +1293,6 @@ void CodexView::initOpenWatcherV2()
 
 void CodexView::updateOpenWatcherV2Labels()
 {
-    if (_theme_mode != ThemeMode::OpenWatcherV2) {
-        return;
-    }
-
     const int week_pct = static_cast<int>(std::lround(remainingRatio(_state.weekly) * 100.0f));
     const bool week_valid = _state.quotaValid;
     const bool session_valid = week_valid && !_state.stale && _state.session5hLeftPct >= 0;
@@ -1958,9 +1356,6 @@ void CodexView::updateOpenWatcherV2Labels()
 
 void CodexView::updateNativeAgentRail(bool force)
 {
-    if (_theme_mode != ThemeMode::OpenWatcherV2) {
-        return;
-    }
     const uint32_t now = GetHAL().millis();
     bool has_animation = false;
     for (const auto& agent : _native_agents) {
@@ -2089,7 +1484,7 @@ void CodexView::resetNativeAgentTouch()
 void CodexView::nativeAgentTouchEvent(lv_event_t* event)
 {
     auto* view = static_cast<CodexView*>(lv_event_get_user_data(event));
-    if (!view || view->_theme_mode != ThemeMode::OpenWatcherV2) {
+    if (!view) {
         return;
     }
 
@@ -2462,8 +1857,7 @@ void CodexView::setMessage(const char* message, uint32_t ttlMs)
 
 void CodexView::setMessageText(const std::string& message)
 {
-    if (message.empty() || message == "Ready" ||
-        (_theme_mode == ThemeMode::CodexMicroDashboard && message == "Waiting...")) {
+    if (message.empty() || message == "Ready") {
         _state.message.clear();
         _state.messageExpiresAtMs = 0;
         if (_message_label) {
@@ -2479,7 +1873,6 @@ void CodexView::setMessageText(const std::string& message)
         _message_label->setText(_state.message.c_str());
         _message_label->setHidden(_voice_mode != VoiceMode::Idle);
     }
-    updateCodexMicroDashboardLabels();
 }
 
 void CodexView::updateConnectionDots()

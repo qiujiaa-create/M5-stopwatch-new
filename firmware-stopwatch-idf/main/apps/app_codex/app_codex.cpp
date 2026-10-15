@@ -9,7 +9,6 @@
 #include <hal/ble_bridge.h>
 #include <hal/codex_micro_hid.h>
 #include <hal/hal.h>
-#include <hal/utils/settings/settings.h>
 #include <mooncake.h>
 #include <mooncake_log.h>
 
@@ -18,31 +17,6 @@ using namespace mooncake;
 namespace {
 
 constexpr uint32_t kStatusBarFrameMs = 50;
-constexpr const char* kCodexSettingsNs = "codex";
-constexpr const char* kThemeKey = "theme";
-constexpr const char* kThemeGenerationKey = "theme_gen";
-constexpr const char* kThemeCodexMicroDashboard = "codex_micro_dashboard";
-constexpr const char* kThemeOpenWatcherV2 = "openwatcher_v2";
-
-view::CodexView::ThemeMode load_codex_theme_mode()
-{
-    Settings settings(kCodexSettingsNs, true);
-    if (settings.GetInt(kThemeGenerationKey, 0) < 1) {
-        settings.SetString(kThemeKey, kThemeCodexMicroDashboard);
-        settings.SetInt(kThemeGenerationKey, 1);
-        return view::CodexView::ThemeMode::CodexMicroDashboard;
-    }
-    const std::string theme = settings.GetString(kThemeKey, kThemeCodexMicroDashboard);
-    if (theme == kThemeCodexMicroDashboard) {
-        return view::CodexView::ThemeMode::CodexMicroDashboard;
-    }
-    if (theme == kThemeOpenWatcherV2) {
-        return view::CodexView::ThemeMode::OpenWatcherV2;
-    }
-    // A removed or unknown persisted theme must still open Codex safely.
-    return view::CodexView::ThemeMode::CodexMicroDashboard;
-}
-
 }  // namespace
 
 AppCodex::AppCodex()
@@ -95,7 +69,9 @@ void AppCodex::onOpen()
     LvglLockGuard lock;
 
     _view = std::make_unique<view::CodexView>();
-    _view->init(lv_screen_active(), load_codex_theme_mode());
+    GetHAL().bootLogo.reset();
+    _view->init(lv_screen_active());
+    mclog::tagInfo(getAppInfo().name, "V2 page ready: {} ms since boot", GetHAL().millis());
     view::create_status_bar(0x0B2030, 0x7DD8FF, true);
 }
 
@@ -329,10 +305,6 @@ void AppCodex::updateBatteryStatusBar(uint32_t now)
     }
     _last_battery_check_ms = now;
 
-    if (_view) {
-        _view->setBatteryState(GetHAL().getBatteryLevel(), GetHAL().isBatteryCharging());
-    }
-
     if (GetHAL().getBatteryLevel() < 20) {
         view::show_status_bar(5000, true);
     }
@@ -523,25 +495,11 @@ void AppCodex::handleBluetoothKeys()
         if (hal.btnA.wasReleased()) {
             handleNativeMicrophoneUp();
         }
-        if (hal.btnB.wasPressed()) {
-            LvglLockGuard lock;
-            if (_view) {
-                _view->setPhysicalControlState(hal.btnA.isPressed(), true);
-            }
-        }
         if (hal.btnB.wasReleased()) {
             if (!codex_micro_hid::tap_control_action(codex_micro_hid::ControlAction::Send) && _view) {
                 LvglLockGuard lock;
                 _view->showActionMessage("CODEX MICRO OFFLINE");
             }
-            LvglLockGuard lock;
-            if (_view) {
-                _view->setPhysicalControlState(hal.btnA.isPressed(), false);
-            }
-        }
-        if ((hal.btnA.wasPressed() || hal.btnA.wasReleased()) && _view) {
-            LvglLockGuard lock;
-            _view->setPhysicalControlState(hal.btnA.isPressed(), hal.btnB.isPressed());
         }
         return;
     }

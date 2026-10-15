@@ -144,18 +144,6 @@ private:
     bool _applied_enabled = false;
 };
 
-class CodexThemeWorker : public WorkerBase {
-public:
-    CodexThemeWorker();
-    ~CodexThemeWorker();
-    void update() override;
-
-private:
-    class CodexThemeView;
-
-    std::unique_ptr<CodexThemeView> _view;
-};
-
 /**
  * @brief
  *

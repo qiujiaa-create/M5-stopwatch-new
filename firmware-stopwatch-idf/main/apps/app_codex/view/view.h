@@ -18,11 +18,6 @@ namespace view {
 
 class CodexView {
 public:
-    enum class ThemeMode : uint8_t {
-        CodexMicroDashboard,
-        OpenWatcherV2,
-    };
-
     enum class VoiceMode : uint8_t {
         Idle,
         Recording,
@@ -83,7 +78,7 @@ public:
         uint32_t messageExpiresAtMs = 0;
     };
 
-    void init(lv_obj_t* parent, ThemeMode themeMode = ThemeMode::CodexMicroDashboard);
+    void init(lv_obj_t* parent);
     void update();
     void applyQuota(int weeklyLeftPct,
                     const std::string& weeklyResetLabel,
@@ -98,8 +93,6 @@ public:
     void setNativeAgentStates(bool ready,
                               bool communicating,
                               const std::array<NativeAgentState, 6>& agents);
-    void setBatteryState(int percent, bool charging);
-    void setPhysicalControlState(bool leftPressed, bool rightPressed);
     void showTaskList();
     std::string consumeTaskOpenRequest();
     int consumeNativeAgentSlotRequest();
@@ -116,7 +109,6 @@ public:
 
 private:
     std::unique_ptr<uitk::lvgl_cpp::Container> _panel;
-    ThemeMode _theme_mode = ThemeMode::CodexMicroDashboard;
     std::unique_ptr<uitk::lvgl_cpp::Label> _message_label;
     std::unique_ptr<uitk::lvgl_cpp::Container> _voice_waveform;
     std::array<std::unique_ptr<uitk::lvgl_cpp::Container>, 9> _voice_bars;
@@ -138,14 +130,6 @@ private:
     std::unique_ptr<uitk::lvgl_cpp::Container> _v2_sync_dot;
     std::array<std::unique_ptr<uitk::lvgl_cpp::Container>, 4> _v2_agent_hits;
     std::array<std::unique_ptr<uitk::lvgl_cpp::Container>, 4> _v2_agent_dots;
-    std::unique_ptr<uitk::lvgl_cpp::Container> _micro_canvas;
-    std::unique_ptr<uitk::lvgl_cpp::Label> _micro_health_label;
-    std::unique_ptr<uitk::lvgl_cpp::Label> _micro_caption_label;
-    std::unique_ptr<uitk::lvgl_cpp::Label> _micro_quota_label;
-    std::unique_ptr<uitk::lvgl_cpp::Label> _micro_reset_label;
-    std::unique_ptr<uitk::lvgl_cpp::Label> _micro_weekly_label;
-    std::unique_ptr<uitk::lvgl_cpp::Label> _micro_transient_label;
-    std::array<std::unique_ptr<uitk::lvgl_cpp::Label>, 6> _micro_agent_labels;
     std::unique_ptr<uitk::lvgl_cpp::Container> _action_wheel_canvas;
     std::unique_ptr<uitk::lvgl_cpp::Container> _action_wheel_center;
     std::unique_ptr<uitk::lvgl_cpp::Label> _action_wheel_center_label;
@@ -188,23 +172,8 @@ private:
     std::array<uint32_t, 4> _native_agent_dot_colors = {};
     bool _native_agents_ready = false;
     bool _native_codex_communicating = false;
-    bool _micro_last_live_state = false;
-    uint32_t _micro_last_selfheal_ms = 0;
     int _native_agent_slot_request = -1;
     int _native_action_request = -1;
-    int _battery_percent = -1;
-    bool _battery_charging = false;
-    bool _micro_left_pressed = false;
-    bool _micro_right_pressed = false;
-    bool _micro_touch_tracking = false;
-    bool _micro_send_candidate = false;
-    bool _micro_swipe_active = false;
-    int _micro_touch_start_x = 0;
-    int _micro_touch_start_y = 0;
-    int _micro_swipe_direction = -1;
-    int _micro_completed_agent = -1;
-    uint32_t _micro_completed_until_ms = 0;
-    bool _native_agents_observed = false;
     uint32_t _last_native_agent_anim_tick = 0;
     bool _native_agent_touch_tracking = false;
     int _native_agent_touch_candidate = -1;
@@ -226,12 +195,6 @@ private:
     static void nativeAgentTouchEvent(lv_event_t* event);
     static void drawOpenWatcherV2Event(lv_event_t* event);
     void drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords);
-    void initCodexMicroDashboard();
-    void updateCodexMicroDashboardLabels();
-    void updateCodexMicroDashboardTouch();
-    int codexMicroAgentAt(int x, int y) const;
-    static void drawCodexMicroDashboardEvent(lv_event_t* event);
-    void drawCodexMicroDashboard(lv_layer_t* layer, const lv_area_t& coords);
     void initActionWheel();
     void updateActionWheelGesture();
     void setActionWheelVisible(bool visible);

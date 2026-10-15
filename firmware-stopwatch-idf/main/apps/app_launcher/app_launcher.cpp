@@ -16,6 +16,14 @@ void AppLauncher::onLauncherCreate()
 {
     mclog::tagInfo(getAppInfo().name, "on create");
 
+    const int codex_id = launcher_shortcuts::resolveAppId(launcher_shortcuts::Target::Codex, getAppProps());
+    if (codex_id >= 0 && openApp(codex_id)) {
+        _is_first_open = false;
+        _should_play_boot_sfx = false;
+        mclog::tagInfo(getAppInfo().name, "startup target: Codex");
+        return;
+    }
+    mclog::tagWarn(getAppInfo().name, "Codex unavailable, opening launcher");
     open();
 }
 

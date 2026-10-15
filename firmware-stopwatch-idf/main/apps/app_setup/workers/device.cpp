@@ -17,11 +17,6 @@ using namespace smooth_ui_toolkit::lvgl_cpp;
 using namespace setup_workers;
 
 static const std::string_view _tag = "Setup-Device";
-static constexpr const char* kCodexSettingsNs = "codex";
-static constexpr const char* kCodexThemeKey = "theme";
-static constexpr const char* kCodexThemeGenerationKey = "theme_gen";
-static constexpr const char* kCodexThemeMicroDashboard = "codex_micro_dashboard";
-static constexpr const char* kCodexThemeOpenWatcherV2 = "openwatcher_v2";
 
 namespace setup_workers {
 
@@ -342,77 +337,6 @@ private:
     bool _disconnect_requested = false;
 };
 
-class CodexThemeWorker::CodexThemeView {
-public:
-    explicit CodexThemeView(const std::string& initialTheme) : _selected_theme(initialTheme)
-    {
-        _panel = std::make_unique<Container>(lv_screen_active());
-        _panel->align(LV_ALIGN_CENTER, 0, 0);
-        _panel->setSize(466, 466);
-        _panel->setRadius(0);
-        _panel->setBorderWidth(0);
-        _panel->setPaddingAll(0);
-        _panel->setBgColor(lv_color_hex(0x000000));
-        _panel->setBgOpa(LV_OPA_COVER);
-        _panel->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
-
-        _title = std::make_unique<Label>(_panel->get());
-        _title->setText("Codex Theme");
-        _title->setTextFont(&MontserratSemiBold26);
-        _title->setTextColor(lv_color_hex(0xFFFFFF));
-        _title->setWidth(260);
-        _title->setTextAlign(LV_TEXT_ALIGN_CENTER);
-        _title->align(LV_ALIGN_TOP_MID, 0, 54);
-
-        createThemeButton(103, "Codex Micro", kCodexThemeMicroDashboard, 0x126C63);
-        createThemeButton(253, "OpenWatcher V2", kCodexThemeOpenWatcherV2, 0x14506A);
-    }
-
-    const std::string& selectedTheme() const
-    {
-        return _selected_theme;
-    }
-
-    bool consumeSaveRequested()
-    {
-        bool requested = _save_requested;
-        _save_requested = false;
-        return requested;
-    }
-
-private:
-    void createThemeButton(int y, const char* labelText, const char* themeValue, uint32_t activeColor)
-    {
-        const bool active = _selected_theme == themeValue;
-        auto button = std::make_unique<Button>(_panel->get());
-        button->align(LV_ALIGN_TOP_MID, 0, y);
-        button->setSize(374, 82);
-        button->setRadius(41);
-        button->setBorderWidth(0);
-        button->setShadowWidth(active ? 14 : 0);
-        button->setShadowColor(lv_color_hex(activeColor));
-        button->setShadowOpa(active ? 80 : 0);
-        button->setBgColor(lv_color_hex(active ? activeColor : 0x333333));
-        button->label().setText(labelText);
-        button->label().setTextFont(&lv_font_montserrat_28);
-        button->label().setTextColor(lv_color_hex(active ? 0xE8F8FF : 0xFFFFFF));
-        button->label().align(LV_ALIGN_CENTER, 0, 0);
-        button->label().setWidth(300);
-        button->label().setTextAlign(LV_TEXT_ALIGN_CENTER);
-        button->onClick().connect([this, theme = std::string(themeValue)]() {
-            _selected_theme = theme;
-            _save_requested = true;
-        });
-        _buttons.push_back(std::move(button));
-    }
-
-    std::unique_ptr<Container> _panel;
-    std::unique_ptr<Label> _title;
-    std::vector<std::unique_ptr<Button>> _buttons;
-    std::string _selected_theme;
-    bool _save_requested = false;
-};
-
 }  // namespace setup_workers
 
 BrightnessWorker::BrightnessWorker()
@@ -530,35 +454,5 @@ void BluetoothWorker::update()
 }
 
 BluetoothWorker::~BluetoothWorker()
-{
-}
-
-CodexThemeWorker::CodexThemeWorker()
-{
-    mclog::tagInfo(_tag, "start codex theme worker");
-
-    Settings settings(kCodexSettingsNs, false);
-    const std::string theme = settings.GetString(kCodexThemeKey, kCodexThemeMicroDashboard);
-    const bool known = theme == kCodexThemeMicroDashboard ||
-                       theme == kCodexThemeOpenWatcherV2;
-    _view = std::make_unique<CodexThemeView>(known ? theme : kCodexThemeMicroDashboard);
-}
-
-void CodexThemeWorker::update()
-{
-    if (consumeGlobalExitShortcut()) {
-        return;
-    }
-
-    if (_view && _view->consumeSaveRequested()) {
-        Settings settings(kCodexSettingsNs, true);
-        settings.SetString(kCodexThemeKey, _view->selectedTheme());
-        settings.SetInt(kCodexThemeGenerationKey, 1);
-        GetHAL().vibrate(35, 100);
-        _is_done = true;
-    }
-}
-
-CodexThemeWorker::~CodexThemeWorker()
 {
 }

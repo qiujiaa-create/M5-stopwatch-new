@@ -1,8 +1,8 @@
 # Agent 与二次开发指南
 
-文档版本：1.5；最后更新：2026-10-12 18:23。
+文档版本：1.6；最后更新：2026-10-15 11:55。
 
-**现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录当时的固件已刷入 factory，但后续提交及页面、输入操作仍待单独验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 只保留 Codex Micro 与 OpenWatcher V2；Official V1 / Classic Pet 及其逐帧图片已移除。小智是 ota_0 的独立固件，不是第三套 Codex 页面。
+**现状提示：**本指南中的“已验证能力”包含历史验收记录。2026-09-17 本目录当时的固件已刷入 factory，但后续提交及页面、输入操作仍待单独验收。当前状态以仓库根目录 `PROJECT_STATE.md` 为准。Codex App 只保留 OpenWatcher V2；旧 Codex Micro 页面与主题选择已移除，Codex Micro 原生输入模式保留。StopWatch 主固件开机直接进入 V2，A+B 退出后回到 Launcher。小智是 ota_0 的独立固件，不属于 Codex 主题。
 
 本文面向使用 Codex、Claude Code、Cursor 或其他代码 Agent 修改本项目的开发者，也适合第一次接触 ESP-IDF、LVGL、BLE HID 和 macOS Core Audio 的贡献者。
 
@@ -17,7 +17,7 @@
 
 | 组件 | 版本 | 已验证能力 |
 | --- | --- | --- |
-| StopWatch 固件（factory） | v0.10.7 版本字段 | Codex Micro / OpenWatcher V2、独立 Focus 本地计时、A/B 键、摇晃、实时 BLE 麦克风、5H 与周额度、四小时热力图、四 Agent、推理滑动、中心四向 Radial、持久化配对保护、Vendor HID 在线自校验、开机录音就绪门控与 BLE 音频背压 |
+| StopWatch 固件（factory） | v0.10.7 版本字段 | OpenWatcher V2、独立 Focus 本地计时、A/B 键、摇晃、实时 BLE 麦克风、5H 与周额度、四小时热力图、四 Agent、推理滑动、中心四向 Radial、持久化配对保护、Vendor HID 在线自校验、开机录音就绪门控与 BLE 音频背压 |
 | 小智固件（ota_0） | v2.2.6 上游基础 | StopWatch 板卡适配与独立启动槽；构建、当前启动槽和语音对话验收分别记录 |
 | macOS Bridge | v1.4.1 | 麦克风就绪握手、可选跨 Mac 额度与活动同步；保留 BLE Companion、Typeless、HID 恢复、固定虚拟输出和路由异常静音 |
 | 虚拟麦克风 | `M5 StopWatch Mic` | Bridge 解码 16 kHz 单声道 PCM，经采样率转换写入虚拟设备；当前回环验收设置为 48 kHz 双声道 |
@@ -68,7 +68,7 @@ Mac 本机 Codex 状态
 | 模块 | 主要文件 | 作用 |
 | --- | --- | --- |
 | Codex App 控制器 | `firmware-stopwatch-idf/main/apps/app_codex/app_codex.cpp` | 汇总按键、触摸请求、BLE 状态、额度和录音状态 |
-| Codex UI | `firmware-stopwatch-idf/main/apps/app_codex/view/view.cpp`、`view.h` | 两套 UI、热力图、波形、四 Agent、推理面板、中心四向控制 |
+| Codex UI | `firmware-stopwatch-idf/main/apps/app_codex/view/view.cpp`、`view.h` | V2 UI、热力图、波形、四 Agent、推理面板、中心四向控制 |
 | Focus 本地计时 | `firmware-stopwatch-idf/main/apps/app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp` | 正计时、1–60 分钟倒计时、A/B 实体键、本地 NVS 时长与铃声设置、圆屏 UI；不使用 Mac Bridge |
 | Codex 配置 | `firmware-stopwatch-idf/main/apps/app_codex/codex_config.h` | 示例 URL、刷新周期、Wi-Fi 占位符和输入默认值 |
 | 面板解析 | `firmware-stopwatch-idf/main/apps/app_codex/codex_quota_client.cpp` | 接收 Bridge/HTTP 面板，解析额度、活动和推理标签 |
@@ -96,6 +96,11 @@ Mac 本机 Codex 状态
 
 ## 4. 用户交互与真实参数
 
+StopWatch 每次启动由 `AppLauncher::onLauncherCreate()` 按名称解析 Codex，直接排入原 Launcher sleeping/open 生命周期；首屏不创建 Launcher，不播放 Launcher 开机音，也不等待首次引导。Codex 不存在时才回退 Launcher。Codex 打开时销毁 BootLogo；A+B 关闭后正常返回 Launcher，自动进入仅发生在本次启动的 create 阶段。
+
+`CodexView` 固定初始化 OpenWatcher V2，不再读写 `codex/theme`、`theme_gen`。这些历史键留在 NVS 也不会影响显示，输入模式和配对数据保留。`frameIntervalMs()` 在主页面返回 33 ms（任务列表为 100 ms）；四 Agent、中心长按仍为 280 ms，BLE 音频格式和就绪门控保持原样。硬件初始化和 BLE 配对时序不得为缩短启动而删去。
+
+
 ### 4.1 实体按键
 
 `Codex Micro` 输入模式：
@@ -117,7 +122,7 @@ Typeless 输入模式：
 
 微信输入模式的 A 按住右 Option、B 短按确认和 B 长按配置动作维持原样。Typeless 用户应先用 A 结束听写并等待文字出现，再按 B 发送；旧版的 B 录音防误发逻辑不再适用于 Typeless。Bridge 当前输入模式会同步并持久化到手表；主题选择本身不会切换输入模式。
 
-Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。这些标准键位不替代 Codex Micro 的原生 `ACT10`/`ACT12`。修改输入逻辑时必须同时验证 Codex Micro 和 OpenWatcher V2，因为两套 UI 共用同一交互状态机。
+Bridge 可选键位：`F13`–`F20`、`Return`、`Space`、`Tab`、`Escape`。这些标准键位不替代 Codex Micro 的原生 `ACT10`/`ACT12`。修改输入逻辑时需在 V2 中分别验证 Codex Micro、Typeless 与微信输入模式；视觉主题不决定输入模式。
 
 Launcher 首页单独提供 1 秒长按快捷启动，默认 A 打开 Xiaozhi 确认入口、B 打开 Focus；短按 A/B 仍为上一个/下一个图标。目标可在 `Settings → Device → Quick Launch` 中分别设置，NVS namespace 为 `launcher`，键为 `hold_a` / `hold_b`。目标保存稳定字符串而不是运行时 app ID，解析失败时禁用。达到阈值时只锁定目标，必须松手后再打开 APP，避免物理按住状态被新 APP 继承；松手前形成 A+B 会取消单键目标。该逻辑位于 `apps/common/launcher_shortcuts/` 和 `app_launcher`，不得扩散到 Codex/Focus 内部的 A/B 状态机。小智目标只打开 `AppXiaozhi` 的现有确认页，不直接切换 `ota_0`。
 
@@ -285,7 +290,7 @@ UI 支持 solid、breath、shallow breath 等宿主效果。Agent 点的触摸�
 | 推理滑动范围/灵敏度 | `kReasoningTouch*` | Bridge 音频或按键映射 |
 | 中心手势死区/方向 | `kActionWheel*`、`kNativeControl*` | 标准键盘 HID |
 | Agent 协议 | `codex_micro_hid.cpp` | Companion characteristic UUID |
-| A/B 语音交互 | `app_codex.cpp` + Bridge 状态机 | 两套 UI 分别写不同逻辑 |
+| A/B 语音交互 | `app_codex.cpp` + Bridge 状态机 | 按视觉页面改变输入模式或麦克风保护 |
 | Launcher 长按快捷启动 | `app_launcher` + `apps/common/launcher_shortcuts/` + Setup `Quick Launch` | Codex/Focus 内部按键、小智确认流程、运行时 app ID 持久化 |
 | Focus 计时或页面 | `app_focus/focus_timer.h`、`app_focus.cpp`、`view.cpp`；NVS namespace `focus`，键 `minutes` / `ring` | Codex A/B 语音、BLE HID、Bridge、其他 NVS namespace |
 | 波形刷新或 UI 功耗 | `CodexView::frameIntervalMs()` 和差分刷新 | BLE connection interval |
@@ -385,7 +390,7 @@ bash tools/typeless_bridge/tests/run_audio_route_tests.sh --audit-pid <bridge-pi
 
 | 变更类型 | 必测项 |
 | --- | --- |
-| UI | 两套主题、圆屏边缘裁切、状态变化、息屏恢复 |
+| UI | V2、开机直达、A+B 返回 Launcher、圆屏边缘裁切、状态变化、息屏恢复 |
 | 触摸 | 短触取消、长按一次提交、滑动换目标、录音时不误触 |
 | HID | A/B、四 Agent、推理、Radial、重连后再次触发 |
 | 麦克风 | 开始、停止、长语音、虚拟输入电平、丢包统计、输出 UID、拒绝物理扬声器及异常静音 |
@@ -435,7 +440,7 @@ idf.py build
 请先阅读 AGENTS.md 和 docs/AGENT_DEVELOPMENT_GUIDE.md。
 
 目标：<只写一个明确功能>
-必须保留：实时麦克风、A/B 语音状态机、四 Agent 原生 HID、两套 UI 一致性。
+必须保留：实时麦克风、A/B 语音状态机、四 Agent 原生 HID、V2 原生交互。
 允许修改：<明确文件或模块>
 不要修改：<协议、分区、配对或其他边界>
 

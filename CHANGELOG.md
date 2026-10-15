@@ -1,12 +1,19 @@
 # Changelog
 
-文档版本：1.10；最后更新：2026-10-12 18:23。
+文档版本：1.11；最后更新：2026-10-15 12:01。
 
 本项目采用[语义化版本](https://semver.org/lang/zh-CN/)；所有版本更新都在这里记录，并使用同版本 Git 标签发布。
 
 此文件记录固件历史。Mac Bridge 独立更新：最新 **v1.4.1（2026-09-03）** 与固件 v0.10.7 增加麦克风就绪握手，避免开机或重连后的第一次听写无声。详见 [Bridge Changelog](tools/typeless_bridge/CHANGELOG.md)。
 
 ## [Unreleased]
+
+### 仅保留 V2、开机直达 Codex — 2026-10-15
+
+- 删除旧 Codex Micro Dashboard 的页面、专属状态/绘制/触摸代码及 Codex Theme 设置项；V2 为唯一页面，历史主题设置不再参与选择。Codex Micro 原生输入模式继续保留，A/B、Agent、Encoder、Radial、音频与配对协议保持现有行为。
+- StopWatch 主固件每次启动直接打开 Codex V2，省去 Launcher 首屏构建、首次引导等待与 Launcher 开机音；A+B 关闭后回到 Launcher，其余应用与小智确认页仍可使用。小智独立启动槽不变。
+- 首次触摸与手势轮询从空闲 100 ms 改为约 33 ms，Agent/中心长按仍为 280 ms；显示按变化刷新。实际启动速度、交互与功耗需实机复核。
+- 启动生命周期、语音门控、麦克风就绪、Launcher 快捷键、Focus、版本和差异检查通过，ESP-IDF v5.5.4 全量构建通过。factory 应用镜像 4,113,472 字节，SHA-256 `aa8ac2ba214c2963755c71c0c247b03d77b690d5426e3a29bec6241db59b8939`。经用户授权已只刷入 factory；写后 hash、独立 verify_flash 通过，分区表和 otadata 复读未变。复位后 2865 ms 完成 V2 页面初始化，BLE、额度与虚拟麦克风恢复，输出路由审计通过。屏幕、断电开机与实际按键/触摸/语音仍待用户验收；详见 `PROJECT_STATE.md`。
 
 ### Typeless B 键固定发送 — 2026-10-12
 

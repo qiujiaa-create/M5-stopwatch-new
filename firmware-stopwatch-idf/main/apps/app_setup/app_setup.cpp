@@ -89,11 +89,6 @@ void AppSetup::onOpen()
                      _destroy_menu = true;
                      _worker       = std::make_unique<QuickLaunchWorker>();
                  }},
-                {"Codex Theme",
-                 [&]() {
-                     _destroy_menu = true;
-                     _worker       = std::make_unique<CodexThemeWorker>();
-                 }},
             },
         },
         {
