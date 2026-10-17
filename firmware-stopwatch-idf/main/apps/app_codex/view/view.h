@@ -121,7 +121,9 @@ private:
     std::unique_ptr<uitk::lvgl_cpp::Container> _v2_canvas;
     std::unique_ptr<uitk::lvgl_cpp::Label> _v2_title_label;
     std::unique_ptr<uitk::lvgl_cpp::Label> _v2_left_caption_label;
+    std::unique_ptr<uitk::lvgl_cpp::Container> _v2_remaining_group;
     std::unique_ptr<uitk::lvgl_cpp::Label> _v2_remaining_value_label;
+    std::unique_ptr<uitk::lvgl_cpp::Label> _v2_remaining_ones_label;
     std::unique_ptr<uitk::lvgl_cpp::Label> _v2_remaining_unit_label;
     std::unique_ptr<uitk::lvgl_cpp::Label> _v2_today_caption_label;
     std::unique_ptr<uitk::lvgl_cpp::Label> _v2_today_value_label;
@@ -133,6 +135,7 @@ private:
     std::array<std::unique_ptr<uitk::lvgl_cpp::Label>, 4> _v2_agent_states;
     std::array<std::unique_ptr<uitk::lvgl_cpp::Container>, 4> _v2_agent_progress;
     std::unique_ptr<uitk::lvgl_cpp::Container> _v2_knob;
+    std::array<std::unique_ptr<uitk::lvgl_cpp::Label>, 2> _v2_encoder_feedback_labels;
     std::unique_ptr<uitk::lvgl_cpp::Container> _action_wheel_canvas;
     std::unique_ptr<uitk::lvgl_cpp::Container> _radial_detail_canvas;
     std::unique_ptr<uitk::lvgl_cpp::Container> _task_list_canvas;
@@ -185,6 +188,8 @@ private:
     int _encoder_pressed_target = -1;
     int _encoder_touch_start_x = 0;
     int _encoder_touch_start_y = 0;
+    int _encoder_feedback_side = -1;
+    uint32_t _encoder_feedback_expires_at = 0;
     int _reasoning_delta_request = 0;
     VoiceMode _voice_mode = VoiceMode::Idle;
     void initOpenWatcherV2();
@@ -208,6 +213,8 @@ private:
     void setTaskListVisible(bool visible);
     void updateTaskListRows();
     void updateEncoderTouchControl();
+    void showEncoderFeedback(int side);
+    void updateEncoderFeedbackTimeout();
     static void drawEncoderButtonsEvent(lv_event_t* event);
     void drawEncoderButtons(lv_layer_t* layer, const lv_area_t& coords);
     void initVoiceWaveform();

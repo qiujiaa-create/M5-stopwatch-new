@@ -28,7 +28,7 @@ import Foundation
                 "daily_tracking": ["day_key": dayKey, "period_start": ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: start)),
                     "day_start_left_pct": 98, "segment_start_left_pct": 98, "used_since_start_pct_points": 9,
                     "reset_count": 0, "quality": "sampled", "updated_at": ISO8601DateFormatter().string(from: now)],
-                "activity_window_seconds": 14400, "activity_buckets": Array(repeating: 0.0, count: 24)
+                "activity_window_seconds": 28800, "activity_buckets": Array(repeating: 0.0, count: 24)
             ]
             return try JSONSerialization.data(withJSONObject: ["ok": true, "shared_usage": snapshot])
         }

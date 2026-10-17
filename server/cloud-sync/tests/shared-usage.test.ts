@@ -113,13 +113,15 @@ test("activity sessions union across Macs, retry dedup, checkpoints only extend"
   s.ingest(batch("imac", [], [{ ...a, start: now - 500, end: now }]), account, now);
   const r = s.ingest(batch("mini", [], [a]), account, now);
   assert.equal(r.activity_buckets.length, 24);
-  assert.equal(r.activity_buckets[23], .78);
+  assert.equal(r.activity_buckets[23], .43);
   const checkpoint = s.ingest(batch("mini", [], [{ ...a, end: now - 200 }]), account, now);
   assert.deepEqual(checkpoint.activity_buckets, r.activity_buckets);
-  assert.deepEqual(s.snapshot(account, now + 14401).activity_buckets, Array(24).fill(0));
+  assert.deepEqual(s.snapshot(account, now + 28801).activity_buckets, Array(24).fill(0));
   s.close();
 });
 test("heatmap includes real interactions, never quota polls", () => {
   const r = heatmap([{ id: "a", kind: "interaction", start: day - 1, end: day - 1, units: .25 }], day);
   assert.equal(r[23], .02);
+  const fiveHoursAgo = heatmap([{ id: "b", kind: "interaction", start: day - 5 * 3600, end: day - 5 * 3600, units: .25 }], day);
+  assert(fiveHoursAgo.some(value => value > 0), "8-hour heatmap retains activity older than four hours");
 });

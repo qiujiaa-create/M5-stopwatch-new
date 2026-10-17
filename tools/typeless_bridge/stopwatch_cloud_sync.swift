@@ -71,7 +71,7 @@ struct CloudUsageSnapshot: Codable {
 
     func validated(now: Date) throws -> Self {
         guard version == 1, as_of.isFinite, as_of <= now.timeIntervalSince1970 + 120,
-              activity_window_seconds == 14400, activity_buckets.count == 24,
+              activity_window_seconds == 28800, activity_buckets.count == 24,
               activity_buckets.allSatisfy({ $0.isFinite && $0 >= 0 && $0 <= 1 }),
               daily_tracking.used_since_start_pct_points.isFinite,
               daily_tracking.used_since_start_pct_points >= 0,

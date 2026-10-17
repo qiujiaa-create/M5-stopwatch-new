@@ -7,7 +7,9 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 const DAY = 86400;
-const WINDOW = 14400;
+const WINDOW = 28800;
+const ACTIVITY_BUCKETS = 24;
+const ACTIVITY_BUCKET_SECONDS = WINDOW / ACTIVITY_BUCKETS;
 const RETENTION = 8 * DAY;
 type Observation = { id: string; at: number; left: number; reset_at: number | null; partial?: boolean };
 type Activity = { id: string; kind: "recording" | "interaction"; start: number; end: number; units: number };
@@ -64,15 +66,16 @@ export function heatmap(events: Activity[], now: number): number[] {
     if (last && e.start < last.end) last.end = Math.max(last.end, e.end);
     else intervals.push({ start: e.start, end: e.end });
   }
-  return Array.from({ length: 24 }, (_, i) => {
-    const start = now - WINDOW + i * 600, end = start + 600;
+  return Array.from({ length: ACTIVITY_BUCKETS }, (_, i) => {
+    const start = now - WINDOW + i * ACTIVITY_BUCKET_SECONDS;
+    const end = start + ACTIVITY_BUCKET_SECONDS;
     let duration = 0, starts = 0, units = 0;
     for (const e of intervals) {
       duration += Math.max(0, Math.min(end, e.end) - Math.max(start, e.start));
       if (e.start >= start && e.start < end) starts++;
     }
     for (const e of events) if (e.kind === "interaction" && e.start >= start && e.start < end) units += e.units;
-    return Math.round((Math.min(1, duration / 600) * .7 + Math.min(1, (starts + units) / 4) * .3 + Number.EPSILON) * 100) / 100;
+    return Math.round((Math.min(1, duration / ACTIVITY_BUCKET_SECONDS) * .7 + Math.min(1, (starts + units) / 4) * .3 + Number.EPSILON) * 100) / 100;
   });
 }
 

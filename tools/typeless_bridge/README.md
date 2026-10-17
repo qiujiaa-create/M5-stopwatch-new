@@ -13,8 +13,8 @@ It provides local functions including:
 - Optionally observe Typeless recording/processing state and sync it back to the device.
 - Optionally read local Codex auth and push weekly quota snapshots to the device.
 - Track daily weekly-quota consumption using a fixed 08:00 Asia/Shanghai boundary.
-- Optionally share remaining quota, Today and four-hour activity through a user-configured sync API across Macs.
-- Sync the local Codex unread-task count and recent four-hour activity summary.
+- Optionally share remaining quota, Today and eight-hour activity through a user-configured sync API across Macs.
+- Sync the local Codex unread-task count and recent eight-hour activity summary (24 cells, 20 minutes each).
 - Stream the StopWatch microphone as 16 kHz IMA-ADPCM and feed a macOS virtual input named `M5 StopWatch Mic`.
 
 Real keyboard input is sent by the device firmware through BLE HID. The bridge app does not inject Typeless, WeChat IME, Enter, or Clear Input keystrokes into macOS. No account credentials are bundled in the app. Codex quota sync is optional and reads the current user's local `~/.codex/auth.json` only when enabled.

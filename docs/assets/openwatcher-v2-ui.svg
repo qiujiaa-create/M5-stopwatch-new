@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="932" height="932" viewBox="0 0 466 466" role="img" aria-labelledby="title desc">
   <title id="title">OpenWatcher V2 Codex interface</title>
-  <desc id="desc">Circular black interface with semantic quota gradient, remaining quota, daily usage, four-hour activity heatmap and four Codex Agent touch points.</desc>
+  <desc id="desc">Circular black interface with semantic quota gradient, remaining quota, daily usage, eight-hour activity heatmap and four Codex Agent touch points.</desc>
   <defs>
     <clipPath id="screen"><circle cx="233" cy="233" r="232"/></clipPath>
     <linearGradient id="quota" x1="22" y1="130" x2="400" y2="52" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ff4038"/><stop offset=".34" stop-color="#ff9f19"/><stop offset=".68" stop-color="#ffd43b"/><stop offset="1" stop-color="#55f36a"/></linearGradient>
@@ -23,7 +23,7 @@
     <text x="288" y="174" font-size="47" font-weight="650" fill="#42e787">%</text>
     <line x1="44" y1="222" x2="204" y2="222" class="divider"/><line x1="262" y1="222" x2="422" y2="222" class="divider"/>
     <g stroke="#596cff" stroke-width="2"><line x1="218" y1="222" x2="227" y2="222"/><line x1="232" y1="222" x2="241" y2="222"/><line x1="246" y1="222" x2="255" y2="222"/></g>
-    <text x="46" y="252" font-size="18" class="soft">RESET 4D 8H</text><text x="420" y="252" text-anchor="end" font-size="18" class="soft">4H -&gt; NOW</text>
+    <text x="46" y="252" font-size="18" class="soft">RESET 4D 8H</text><text x="420" y="252" text-anchor="end" font-size="18" class="soft">8H -&gt; NOW</text>
     <g>
       <rect class="cell" x="56" y="263" width="24" height="24" rx="4" fill="#142236"/><rect class="cell" x="86" y="263" width="24" height="24" rx="4" fill="#18364a"/><rect class="cell" x="116" y="263" width="24" height="24" rx="4" fill="#174b63"/><rect class="cell" x="146" y="263" width="24" height="24" rx="4" fill="#176078"/>
       <rect class="cell" x="176" y="263" width="24" height="24" rx="4" fill="#1591a2"/><rect class="cell" x="206" y="263" width="24" height="24" rx="4" fill="#174b63"/><rect class="cell" x="236" y="263" width="24" height="24" rx="4" fill="#176078"/><rect class="cell" x="266" y="263" width="24" height="24" rx="4" fill="#18b7b6"/>

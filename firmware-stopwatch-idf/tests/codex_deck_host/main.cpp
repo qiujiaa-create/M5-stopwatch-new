@@ -8,12 +8,19 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <string_view>
 #include <vector>
 using view::CodexView;
 static int touch_x = 0, touch_y = 0;
 static bool touch_down = false;
 static size_t flushed_pixels = 0, flush_count = 0, quota_draws = 0;
 static std::vector<uint8_t> frame(466 * 466 * 3);
+static constexpr int kEncoderLeftX = codex::deck::kEncoderTargets[0].x + codex::deck::kEncoderTargets[0].width / 2;
+static constexpr int kEncoderRightX = codex::deck::kEncoderTargets[1].x + codex::deck::kEncoderTargets[1].width / 2;
+static constexpr int kEncoderY = codex::deck::kEncoderTargets[0].y + codex::deck::kEncoderTargets[0].height / 2;
+static constexpr int kEncoderGapX = (codex::deck::kEncoderTargets[0].x + codex::deck::kEncoderTargets[0].width +
+                                    codex::deck::kEncoderTargets[1].x) / 2;
+static constexpr int kEncoderOutsideY = codex::deck::kEncoderTargets[0].y + codex::deck::kEncoderTargets[0].height + 35;
 static void advance(CodexView& view, int ms) {
     for (int elapsed = 0; elapsed < ms; elapsed += 10) {
         lv_tick_inc(10); lv_timer_handler(); view.update();
@@ -21,6 +28,16 @@ static void advance(CodexView& view, int ms) {
 }
 static void touch(CodexView& view, int x, int y, bool down, int ms) {
     touch_x = x; touch_y = y; touch_down = down; advance(view, ms);
+}
+static lv_obj_t* find_label(lv_obj_t* root, const char* text) {
+    if (lv_obj_check_type(root, &lv_label_class)) {
+        const char* current = lv_label_get_text(root);
+        if (current && std::string_view(current) == text) return root;
+    }
+    for (uint32_t i = 0; i < lv_obj_get_child_count(root); ++i) {
+        if (auto* result = find_label(lv_obj_get_child(root, i), text)) return result;
+    }
+    return nullptr;
 }
 static void save(const std::filesystem::path& path) {
     std::ofstream file(path, std::ios::binary);
@@ -34,6 +51,29 @@ static void save(const std::filesystem::path& path) {
                                static_cast<char>(outside ? 230 : frame[offset])};
         file.write(pixel, 3);
     }
+}
+static int count_color(int x1, int y1, int x2, int y2, uint8_t red, uint8_t green, uint8_t blue) {
+    int count = 0;
+    for (int y = y1; y <= y2; ++y) for (int x = x1; x <= x2; ++x) {
+        const int offset = (y * 466 + x) * 3;
+        if (frame[offset] == blue && frame[offset + 1] == green && frame[offset + 2] == red) ++count;
+    }
+    return count;
+}
+static bool green_pixel_y_bounds(int x1, int y1, int x2, int y2, int& top, int& bottom) {
+    top = 466;
+    bottom = -1;
+    for (int y = y1; y <= y2; ++y) for (int x = x1; x <= x2; ++x) {
+        const int offset = (y * 466 + x) * 3;
+        const int blue = frame[offset];
+        const int green = frame[offset + 1];
+        const int red = frame[offset + 2];
+        if (green > 180 && green > red + 50 && green > blue + 50) {
+            top = std::min(top, y);
+            bottom = std::max(bottom, y);
+        }
+    }
+    return bottom >= top;
 }
 int main(int argc, char** argv) {
     assert(argc == 2);
@@ -76,6 +116,85 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 4; ++i) steady_agents[i].color = 0x00FF4C;
     view.setNativeAgentStates(true, true, steady_agents); advance(view, 300);
     auto* main_panel = lv_obj_get_child(lv_screen_active(), 0);
+    auto* quota_caption = find_label(main_panel, "5H RESET  2H 14M");
+    auto* quota_leading = find_label(main_panel, "8");
+    auto* quota_ones = find_label(main_panel, "2");
+    auto* quota_unit = find_label(main_panel, "%");
+    auto* connection_status = find_label(main_panel, "Codex Ready");
+    auto* quota_meta_left = find_label(main_panel, "WEEK 56%");
+    auto* quota_meta_right = find_label(main_panel, "RESET 4D 8H");
+    assert(quota_caption && quota_leading && quota_ones && quota_unit && connection_status && quota_meta_left && quota_meta_right);
+    auto* remaining_group = lv_obj_get_parent(quota_leading);
+    lv_obj_update_layout(remaining_group);
+    assert(lv_obj_get_x(remaining_group) + lv_obj_get_width(remaining_group) / 2 == 233);
+    lv_area_t status_area, leading_area, ones_area, unit_area, caption_area;
+    lv_obj_get_coords(connection_status, &status_area);
+    lv_obj_get_coords(quota_leading, &leading_area);
+    lv_obj_get_coords(quota_ones, &ones_area);
+    lv_obj_get_coords(quota_unit, &unit_area);
+    lv_obj_get_coords(quota_caption, &caption_area);
+    assert(leading_area.x2 + 1 == 233 && ones_area.x1 == 233);
+    assert(leading_area.y1 == ones_area.y1 && leading_area.y2 == ones_area.y2);
+    assert(ones_area.x2 < unit_area.x1);
+    int leading_pixel_top, leading_pixel_bottom, ones_pixel_top, ones_pixel_bottom;
+    assert(green_pixel_y_bounds(leading_area.x2 - 59, leading_area.y1, leading_area.x2,
+                                leading_area.y2, leading_pixel_top, leading_pixel_bottom));
+    assert(green_pixel_y_bounds(ones_area.x1, ones_area.y1, ones_area.x2, ones_area.y2,
+                                ones_pixel_top, ones_pixel_bottom));
+    assert(leading_pixel_top == ones_pixel_top);
+    assert(std::abs(leading_pixel_bottom - ones_pixel_bottom) <= 1);
+    assert(status_area.y2 < std::min({leading_area.y1, ones_area.y1, unit_area.y1}));
+    assert(std::max({leading_area.y2, ones_area.y2, unit_area.y2}) < caption_area.y1);
+    assert(caption_area.y2 < codex::deck::kKnob.y);
+    assert(codex::deck::kKnob.y + codex::deck::kKnob.height < 199);
+    assert(codex::deck::kEncoderTargets[0].width > 84 && codex::deck::kEncoderTargets[0].height > 34);
+    assert(codex::deck::kEncoderTargets[1].width > 84 && codex::deck::kEncoderTargets[1].height > 34);
+    assert(codex::deck::kEncoderTargets[1].x -
+               (codex::deck::kEncoderTargets[0].x + codex::deck::kEncoderTargets[0].width) == 8);
+    assert(codex::deck::kEncoderTargets[0].contains(codex::deck::kKnob.x, codex::deck::kKnob.y));
+    assert(codex::deck::kEncoderTargets[0].contains(codex::deck::kKnob.x + 83,
+                                                    codex::deck::kKnob.y + codex::deck::kKnob.height - 1));
+    assert(codex::deck::kEncoderTargets[1].contains(codex::deck::kKnob.x + 100, codex::deck::kKnob.y));
+    assert(codex::deck::kEncoderTargets[1].contains(codex::deck::kKnob.x + 183,
+                                                    codex::deck::kKnob.y + codex::deck::kKnob.height - 1));
+
+    snapshot.sessionLeftPct = 5; view.applySnapshot(snapshot); advance(view, 70);
+    assert(std::string(lv_label_get_text(quota_leading)).empty());
+    assert(std::string(lv_label_get_text(quota_ones)) == "5");
+    snapshot.sessionLeftPct = 100; view.applySnapshot(snapshot); advance(view, 70);
+    assert(std::string(lv_label_get_text(quota_leading)) == "10");
+    assert(std::string(lv_label_get_text(quota_ones)) == "0");
+    snapshot.sessionLeftPct = 82; view.applySnapshot(snapshot); advance(view, 70);
+    assert(std::string(lv_label_get_text(quota_leading)) == "8");
+    assert(std::string(lv_label_get_text(quota_ones)) == "2");
+
+    const std::vector<uint8_t> top_quota_before(frame.begin(), frame.begin() + 466 * 190 * 3);
+    const std::vector<uint8_t> weekly_bar_before(frame.begin() + 466 * 190 * 3,
+                                                  frame.begin() + 466 * 225 * 3);
+    snapshot.sessionLeftPct = 25;
+    view.applySnapshot(snapshot); advance(view, 70);
+    assert(std::string(lv_label_get_text(quota_leading)) == "2");
+    assert(std::string(lv_label_get_text(quota_ones)) == "5");
+    assert(!std::equal(top_quota_before.begin(), top_quota_before.end(), frame.begin()));
+    assert(std::equal(weekly_bar_before.begin(), weekly_bar_before.end(),
+                      frame.begin() + 466 * 190 * 3));
+
+    snapshot.sessionLeftPct = 82;
+    view.applySnapshot(snapshot); advance(view, 70);
+    const std::vector<uint8_t> top_quota_restored(frame.begin(), frame.begin() + 466 * 190 * 3);
+    const std::vector<uint8_t> weekly_bar_restored(frame.begin() + 466 * 190 * 3,
+                                                    frame.begin() + 466 * 225 * 3);
+    snapshot.weeklyLeftPct = 30;
+    view.applySnapshot(snapshot); advance(view, 70);
+    assert(std::string(lv_label_get_text(quota_leading)) == "8");
+    assert(std::string(lv_label_get_text(quota_ones)) == "2");
+    assert(std::string(lv_label_get_text(quota_meta_left)) == "WEEK 30%");
+    assert(std::equal(top_quota_restored.begin(), top_quota_restored.end(), frame.begin()));
+    assert(!std::equal(weekly_bar_restored.begin(), weekly_bar_restored.end(),
+                       frame.begin() + 466 * 190 * 3));
+    snapshot.weeklyLeftPct = 56;
+    view.applySnapshot(snapshot); advance(view, 70);
+
     lv_obj_t* battery_icon = nullptr;
     lv_obj_t* bluetooth_icon = nullptr;
     for (uint32_t i = 0; i < lv_obj_get_child_count(main_panel); ++i) {
@@ -163,7 +282,7 @@ int main(int argc, char** argv) {
     save(output / "processing.ppm");
     flushed_pixels = flush_count = quota_draws = 0; advance(view, 5500);
     assert(flush_count == 0 && quota_draws == 0); // No lingering waveform animation.
-    touch(view, 283, 70, true, 100); touch(view, 283, 70, false, 80);
+    touch(view, kEncoderRightX, kEncoderY, true, 100); touch(view, kEncoderRightX, kEncoderY, false, 80);
     assert(view.consumeReasoningDeltaRequest() == 0);
     for (const auto& center : codex::deck::kAgentCenters) {
         touch(view, center.x, center.y, true, 400); touch(view, center.x, center.y, false, 70);
@@ -178,11 +297,11 @@ int main(int argc, char** argv) {
     assert(lv_obj_get_style_opa(radial, LV_PART_MAIN) == LV_OPA_COVER);
     assert(frame[(270 * 466 + 233) * 3] > processing_arrow_brightness);
     flushed_pixels = flush_count = quota_draws = 0;
-    touch(view, 183, 70, true, 100); touch(view, 183, 70, false, 80);
-    touch(view, 283, 70, true, 100); touch(view, 283, 70, false, 80);
+    touch(view, kEncoderLeftX, kEncoderY, true, 100); touch(view, kEncoderLeftX, kEncoderY, false, 80);
+    touch(view, kEncoderRightX, kEncoderY, true, 100); touch(view, kEncoderRightX, kEncoderY, false, 80);
     assert(view.consumeReasoningDeltaRequest() == 0);
-    assert(flushed_pixels < 40000 && quota_draws == 0);
     std::cout << "PERF encoder-two-taps/360ms flushes=" << flush_count << " pixels=" << flushed_pixels << " quota_draws=" << quota_draws << std::endl;
+    assert(flushed_pixels < 40000 && quota_draws <= 3);
     view.setNativeAgentStates(true, true, agents);
     advance(view, 100); save(output / "deck.ppm");
     assert(frame[(199 * 466 + 60) * 3 + 2] > frame[(199 * 466 + 60) * 3 + 1]);
@@ -214,37 +333,66 @@ int main(int argc, char** argv) {
     touch(view, 88, 304, true, 400); assert(view.consumeNativeAgentSlotRequest() == 0);
     touch(view, 88, 304, false, 70);
     agents[0].assigned = true; view.setNativeAgentStates(true, true, agents);
-    // Encoder commits only after release inside the original side.
-    touch(view, 283, 70, true, 100); assert(view.consumeReasoningDeltaRequest() == 0);
-    save(output / "knob.ppm"); touch(view, 283, 70, false, 80);
+    // Encoder feedback appears outside the pressed capsule for 500 ms from
+    // press, independent of release; the action still commits only on release.
+    view.setNativeAgentStates(true, true, steady_agents); advance(view, 100);
+    assert(count_color(101, 126, 139, 149, 0x35, 0xB8, 0xFF) == 0);
+    assert(count_color(326, 126, 364, 149, 0x35, 0xB8, 0xFF) == 0);
+    flushed_pixels = flush_count = quota_draws = 0;
+    touch(view, kEncoderRightX, kEncoderY, true, 100); assert(view.consumeReasoningDeltaRequest() == 0);
+    save(output / "knob.ppm");
+    assert(count_color(101, 126, 139, 149, 0x35, 0xB8, 0xFF) == 0);
+    assert(count_color(326, 126, 364, 149, 0x35, 0xB8, 0xFF) > 0);
+    touch(view, kEncoderRightX, kEncoderY, false, 80);
     assert(view.consumeReasoningDeltaRequest() == 1);
-    touch(view, 183, 70, true, 800); assert(view.consumeReasoningDeltaRequest() == 0);
-    touch(view, 183, 70, false, 80); assert(view.consumeReasoningDeltaRequest() == -1);
-    touch(view, 233, 70, true, 100); touch(view, 233, 70, false, 80);
+    assert(count_color(326, 126, 364, 149, 0x35, 0xB8, 0xFF) > 0);
+    advance(view, 250);
+    assert(count_color(326, 126, 364, 149, 0x35, 0xB8, 0xFF) > 0);
+    advance(view, 150);
+    assert(count_color(326, 126, 364, 149, 0x35, 0xB8, 0xFF) == 0);
+    std::cout << "PERF encoder-feedback/500ms flushes=" << flush_count << " pixels=" << flushed_pixels << " quota_draws=" << quota_draws << std::endl;
+    assert(flushed_pixels < 40000 && quota_draws <= 3);
+    touch(view, kEncoderLeftX, kEncoderY, true, 100); assert(view.consumeReasoningDeltaRequest() == 0);
+    assert(count_color(101, 126, 139, 149, 0x35, 0xB8, 0xFF) > 0);
+    assert(count_color(326, 126, 364, 149, 0x35, 0xB8, 0xFF) == 0);
+    advance(view, 500);
+    assert(count_color(101, 126, 139, 149, 0x35, 0xB8, 0xFF) == 0);
+    advance(view, 250);
+    touch(view, kEncoderLeftX, kEncoderY, false, 80); assert(view.consumeReasoningDeltaRequest() == -1);
+    view.setNativeAgentStates(true, true, agents);
+    touch(view, codex::deck::kEncoderTargets[0].x + 1, codex::deck::kEncoderTargets[0].y + 1, true, 100);
+    touch(view, codex::deck::kEncoderTargets[0].x + 1, codex::deck::kEncoderTargets[0].y + 1, false, 80);
+    assert(view.consumeReasoningDeltaRequest() == -1); // Expanded top-left edge.
+    touch(view, codex::deck::kEncoderTargets[1].x + codex::deck::kEncoderTargets[1].width - 2,
+          codex::deck::kEncoderTargets[1].y + codex::deck::kEncoderTargets[1].height - 2, true, 100);
+    touch(view, codex::deck::kEncoderTargets[1].x + codex::deck::kEncoderTargets[1].width - 2,
+          codex::deck::kEncoderTargets[1].y + codex::deck::kEncoderTargets[1].height - 2, false, 80);
+    assert(view.consumeReasoningDeltaRequest() == 1); // Expanded bottom-right edge.
+    touch(view, kEncoderGapX, kEncoderY, true, 100); touch(view, kEncoderGapX, kEncoderY, false, 80);
     assert(view.consumeReasoningDeltaRequest() == 0); // Center gap.
-    touch(view, 183, 70, true, 100); touch(view, 283, 70, true, 100); touch(view, 283, 70, false, 80);
+    touch(view, kEncoderLeftX, kEncoderY, true, 100); touch(view, kEncoderRightX, kEncoderY, true, 100); touch(view, kEncoderRightX, kEncoderY, false, 80);
     assert(view.consumeReasoningDeltaRequest() == 0); // Crossing cancels.
-    touch(view, 183, 70, true, 100); touch(view, 204, 70, true, 80); touch(view, 183, 70, true, 80);
-    touch(view, 183, 70, false, 80); assert(view.consumeReasoningDeltaRequest() == 0); // Drag and return cannot re-arm.
-    touch(view, 183, 70, true, 100); touch(view, 183, 130, true, 80); touch(view, 183, 130, false, 80);
+    touch(view, kEncoderLeftX, kEncoderY, true, 100); touch(view, 204, kEncoderY, true, 80); touch(view, kEncoderLeftX, kEncoderY, true, 80);
+    touch(view, kEncoderLeftX, kEncoderY, false, 80); assert(view.consumeReasoningDeltaRequest() == 0); // Drag and return cannot re-arm.
+    touch(view, kEncoderLeftX, kEncoderY, true, 100); touch(view, kEncoderLeftX, kEncoderOutsideY, true, 80); touch(view, kEncoderLeftX, kEncoderOutsideY, false, 80);
     assert(view.consumeReasoningDeltaRequest() == 0); // Outside release.
-    touch(view, 283, 70, true, 100); view.setVoiceMode(CodexView::VoiceMode::Recording);
-    touch(view, 283, 70, false, 80); assert(view.consumeReasoningDeltaRequest() == 0);
-    view.setVoiceMode(CodexView::VoiceMode::Idle);
+    touch(view, kEncoderRightX, kEncoderY, true, 100); view.setVoiceMode(CodexView::VoiceMode::Recording);
+    touch(view, kEncoderRightX, kEncoderY, false, 80); assert(view.consumeReasoningDeltaRequest() == 0);
+    view.setVoiceMode(CodexView::VoiceMode::Idle); advance(view, 550);
     float angle = 0, distance = 0;
     const float angles[] = {.75f, 0.f, .25f, .5f};
-    // A short center touch cancels; the panel expands at 200 ms, with no
+    // A short center touch cancels; the panel expands at 150 ms, with no
     // direction emitted by the opening finger even if it moves onto a button.
     touch(view, 233, 302, true, 120); touch(view, 233, 302, false, 70);
     assert(lv_obj_has_flag(detail, LV_OBJ_FLAG_HIDDEN));
     const std::vector<uint8_t> quota_before_detail(frame.begin(), frame.begin() + 466 * 258 * 3);
     flushed_pixels = flush_count = quota_draws = 0;
-    touch(view, 233, 302, true, 180);
+    touch(view, 233, 302, true, 130);
     assert(lv_obj_has_flag(detail, LV_OBJ_FLAG_HIDDEN));
     advance(view, 70); lv_obj_update_layout(radial); assert(!lv_obj_has_flag(detail, LV_OBJ_FLAG_HIDDEN));
-    std::cout << "PERF detail-open/250ms flushes=" << flush_count << " pixels=" << flushed_pixels << " quota_draws=" << quota_draws << std::endl;
+    std::cout << "PERF detail-open/200ms flushes=" << flush_count << " pixels=" << flushed_pixels << " quota_draws=" << quota_draws << std::endl;
     touch(view, 329, 233, true, 100);
-    std::cout << "PERF detail-open/350ms flushes=" << flush_count << " pixels=" << flushed_pixels << " quota_draws=" << quota_draws << std::endl;
+    std::cout << "PERF detail-open/300ms flushes=" << flush_count << " pixels=" << flushed_pixels << " quota_draws=" << quota_draws << std::endl;
     assert(flushed_pixels * 10 <= 124456 * 11); // Opening never invalidates the full screen.
     assert(!view.consumeNativeRadialRequest(angle, distance));
     touch(view, 329, 233, false, 70);
@@ -303,7 +451,9 @@ int main(int argc, char** argv) {
     assert(lv_obj_has_flag(detail, LV_OBJ_FLAG_HIDDEN) && view.consumeNativeAgentSlotRequest() == -1);
     assert(std::equal(quota_before_detail.begin(), quota_before_detail.end(), frame.begin()));
     touch(view, 233, 302, true, 260); touch(view, 233, 302, false, 70);
-    touch(view, 283, 70, true, 60); touch(view, 283, 70, false, 70);
+    touch(view, kEncoderRightX, kEncoderY, true, 60); touch(view, kEncoderRightX, kEncoderY, false, 70);
+    assert(!lv_obj_has_flag(detail, LV_OBJ_FLAG_HIDDEN) && view.consumeReasoningDeltaRequest() == 0);
+    touch(view, 60, 304, true, 60); touch(view, 60, 304, false, 70);
     assert(lv_obj_has_flag(detail, LV_OBJ_FLAG_HIDDEN) && view.consumeReasoningDeltaRequest() == 0);
     // Center X closes on press, without waiting for release or another hold.
     touch(view, 233, 302, true, 260); touch(view, 233, 302, false, 70);
@@ -335,15 +485,18 @@ int main(int argc, char** argv) {
     touch(view, 233, 137, false, 70);
     touch(view, 88, 304, true, 400); assert(view.consumeNativeAgentSlotRequest() == -1);
     touch(view, 88, 304, false, 70);
-    touch(view, 283, 70, true, 100); touch(view, 283, 70, false, 80);
+    touch(view, kEncoderRightX, kEncoderY, true, 100); touch(view, kEncoderRightX, kEncoderY, false, 80);
     assert(view.consumeReasoningDeltaRequest() == 0);
     advance(view, 100); save(output / "recording.ppm");
     view.setVoiceMode(CodexView::VoiceMode::Interrupted); advance(view, 70); save(output / "interrupted.ppm");
     view.setVoiceMode(CodexView::VoiceMode::Idle);
     snapshot.sessionLeftPct = 201; view.applySnapshot(snapshot); advance(view, 70);
-    assert(frame[(199 * 466 + 60) * 3 + 1] == frame[(199 * 466 + 340) * 3 + 1]);
+    assert(std::string(lv_label_get_text(quota_caption)) == "5H RESET  --");
+    assert(std::string(lv_label_get_text(quota_leading)) == "-");
+    assert(std::string(lv_label_get_text(quota_ones)) == "-");
+    assert(std::string(lv_label_get_text(quota_meta_left)) == "WEEK 56%");
     snapshot.stale = true; snapshot.sessionLeftPct = -1; view.applySnapshot(snapshot);
     view.setNativeAgentStates(false, false, agents); view.applyBleState(false, "", false);
     advance(view, 100); save(output / "offline.ppm");
-    std::cout << "PASS: compact footer/card clearance, digits-only battery 0/29/30/31/100/unknown, local status updates, blue Bluetooth/red slash, status dots removed, footer visibility, circle bounds, separated targets, four slots, short cancellation, single commit, unassigned slot, encoder release/left/right/cancel/no-repeat/voice gate, 200ms persistent detail, four direction taps, modal cancellation/isolation, release/recording neutral, immediate waveform stop, dimmed processing pad without animation and processing touch gate\n";
+    std::cout << "PASS: 5H upper arc/value and weekly lower bar bindings, recent 8h activity rendering, tens/ones center anchor and shared baseline for 5/82/100/unknown, compact footer/card clearance, digits-only battery 0/29/30/31/100/unknown, local status updates, blue Bluetooth/red slash, status dots removed, footer visibility, circle bounds, expanded encoder target edges and center gap, encoder -1/+1 press feedback, four slots, short cancellation, single commit, unassigned slot, encoder release/left/right/cancel/no-repeat/voice gate, 150ms persistent detail, four direction taps, modal cancellation/isolation, release/recording neutral, immediate waveform stop, dimmed processing pad without animation and processing touch gate\n";
 }

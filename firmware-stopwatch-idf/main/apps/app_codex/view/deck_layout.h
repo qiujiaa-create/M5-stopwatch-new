@@ -39,11 +39,13 @@ constexpr int radialDetailAt(int x, int y) {
     if (ay * 1000 <= ax * 839) return dx > 0 ? 1 : 3;
     return -1;
 }
-constexpr Rect kKnob{141, 55, 184, 34};
+constexpr Rect kKnob{141, 150, 184, 34};
 constexpr Rect kBatteryStatus{190, 434, 46, 22};
 constexpr Rect kBluetoothStatus{254, 434, 22, 22};
-// Two release-to-commit zones; a 16 px center gap rejects cross-zone contacts.
-constexpr std::array<Rect, 2> kEncoderTargets = {{{135, 49, 90, 46}, {241, 49, 90, 46}}};
+// Finger targets extend beyond the 84x34 visible capsules. Most horizontal
+// expansion goes toward the round display edge, while an 8 px center gap
+// continues to reject ambiguous contacts.
+constexpr std::array<Rect, 2> kEncoderTargets = {{{125, 136, 104, 62}, {237, 136, 104, 62}}};
 constexpr int encoderAt(int x, int y) {
     for (int side = 0; side < 2; ++side) if (kEncoderTargets[side].contains(x, y)) return side;
     return -1;

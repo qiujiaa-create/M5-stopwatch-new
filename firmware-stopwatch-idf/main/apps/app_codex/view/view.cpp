@@ -31,7 +31,7 @@ constexpr uint32_t kOwSoftText   = 0xADB9CC;
 constexpr uint32_t kOwTrack      = 0x1E2A3C;
 constexpr uint32_t kOwStatusIdle = 0x7895B2;
 constexpr uint32_t kOwAlert      = 0xFF405C;
-constexpr uint32_t kActionWheelHoldMs = 200;
+constexpr uint32_t kActionWheelHoldMs = 150;
 constexpr uint32_t kActionWheelFrameMs = 33;
 constexpr int kActionWheelStartRadius = codex::deck::kRadialHitRadius;
 constexpr int kNativeControlHoldSlop = 22;
@@ -313,6 +313,7 @@ void CodexView::init(lv_obj_t* parent)
 
 void CodexView::update()
 {
+    updateEncoderFeedbackTimeout();
     updateStatusIndicators();
     if (_task_list_active) {
         return;
@@ -858,7 +859,7 @@ void CodexView::drawActionWheelEvent(lv_event_t* event)
 void CodexView::drawActionWheel(lv_layer_t* layer, const lv_area_t& coords)
 {
     // Immediate contact feedback, with no per-frame animation competing with
-    // the 200ms recognition timer for the display lock.
+    // the 150ms recognition timer for the display lock.
     const float hold = _action_touch_tracking && !_action_wheel_active ? 1.0f : 0.0f;
     drawRadialPad(layer, coords, _action_wheel_selection, _action_wheel_active, hold,
                   lv_obj_get_style_opa_recursive(_action_wheel_canvas->get(), LV_PART_MAIN));
@@ -993,6 +994,7 @@ void CodexView::updateEncoderTouchControl()
             _encoder_touch_start_y = point.y;
             if (_encoder_touch_tracking) {
                 GetHAL().vibrate(12, 35);
+                showEncoderFeedback(_encoder_pressed_target);
                 lv_obj_invalidate(_v2_knob->get());
             }
         } else if (_encoder_touch_tracking && !_encoder_touch_cancelled) {
@@ -1019,6 +1021,25 @@ void CodexView::updateEncoderTouchControl()
     _encoder_touch_cancelled = false;
     _encoder_pressed_target = -1;
     lv_obj_invalidate(_v2_knob->get());
+}
+
+void CodexView::showEncoderFeedback(int side)
+{
+    if (side < 0 || side >= 2) return;
+    setLabelTextIfChanged(*_v2_encoder_feedback_labels[0], side == 0 ? "-1" : "");
+    setLabelTextIfChanged(*_v2_encoder_feedback_labels[1], side == 1 ? "+1" : "");
+    _encoder_feedback_side = side;
+    _encoder_feedback_expires_at = GetHAL().millis() + 500;
+}
+
+void CodexView::updateEncoderFeedbackTimeout()
+{
+    if (_encoder_feedback_side < 0 ||
+        static_cast<int32_t>(GetHAL().millis() - _encoder_feedback_expires_at) < 0) return;
+    setLabelTextIfChanged(*_v2_encoder_feedback_labels[0], "");
+    setLabelTextIfChanged(*_v2_encoder_feedback_labels[1], "");
+    _encoder_feedback_side = -1;
+    _encoder_feedback_expires_at = 0;
 }
 
 void CodexView::drawEncoderButtonsEvent(lv_event_t* event)
@@ -1091,15 +1112,55 @@ void CodexView::initOpenWatcherV2()
     };
     _v2_title_label = label("Codex Offline", &lv_font_montserrat_20, 93, 26, 280, kOwBlue);
     _v2_title_label->setLongMode(LV_LABEL_LONG_MODE_DOTS);
-    _v2_left_caption_label = label("WEEK LEFT  --", &lv_font_montserrat_16, 75, 104, 316, kOwSoftText);
-    _v2_remaining_value_label = label("--", &CommissionerMedium64, 157, 124, 130, kOwGreen, LV_TEXT_ALIGN_RIGHT);
-    _v2_remaining_unit_label = label("%", &lv_font_montserrat_36, 289, 146, 60, kOwGreen, LV_TEXT_ALIGN_LEFT);
-    _v2_today_caption_label = label("TODAY", &lv_font_montserrat_16, 54, 132, 100, kOwToday, LV_TEXT_ALIGN_LEFT);
-    _v2_today_value_label = label("--%", &lv_font_montserrat_36, 52, 153, 100, kOwToday, LV_TEXT_ALIGN_LEFT);
+    _v2_remaining_group = std::make_unique<Container>(_panel->get());
+    _v2_remaining_group->setSize(300, 66);
+    _v2_remaining_group->align(LV_ALIGN_TOP_LEFT, 83, 48);
+    _v2_remaining_group->setBgOpa(LV_OPA_TRANSP);
+    _v2_remaining_group->setBorderWidth(0);
+    _v2_remaining_group->setPaddingAll(0);
+    _v2_remaining_group->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _v2_remaining_group->removeFlag(LV_OBJ_FLAG_CLICKABLE);
+    _v2_remaining_value_label = std::make_unique<Label>(_v2_remaining_group->get());
+    _v2_remaining_value_label->setText("-");
+    _v2_remaining_value_label->setTextFont(&CommissionerMedium64);
+    _v2_remaining_value_label->setTextColor(lv_color_hex(kOwGreen));
+    _v2_remaining_value_label->setSize(150, LV_SIZE_CONTENT);
+    _v2_remaining_value_label->setTextAlign(LV_TEXT_ALIGN_RIGHT);
+    _v2_remaining_value_label->align(LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    _v2_remaining_value_label->removeFlag(LV_OBJ_FLAG_CLICKABLE);
+    _v2_remaining_ones_label = std::make_unique<Label>(_v2_remaining_group->get());
+    _v2_remaining_ones_label->setText("-");
+    _v2_remaining_ones_label->setTextFont(&CommissionerMedium64);
+    _v2_remaining_ones_label->setTextColor(lv_color_hex(kOwGreen));
+    _v2_remaining_ones_label->setSize(LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    _v2_remaining_ones_label->align(LV_ALIGN_BOTTOM_LEFT, 150, 0);
+    _v2_remaining_ones_label->removeFlag(LV_OBJ_FLAG_CLICKABLE);
+    _v2_remaining_unit_label = std::make_unique<Label>(_v2_remaining_group->get());
+    _v2_remaining_unit_label->setText("%");
+    _v2_remaining_unit_label->setTextFont(&lv_font_montserrat_36);
+    _v2_remaining_unit_label->setTextColor(lv_color_hex(kOwGreen));
+    _v2_remaining_unit_label->setSize(LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    _v2_remaining_unit_label->alignTo(*_v2_remaining_ones_label, LV_ALIGN_OUT_RIGHT_BOTTOM, 4, 0);
+    _v2_remaining_unit_label->removeFlag(LV_OBJ_FLAG_CLICKABLE);
+    _v2_left_caption_label = label("5H RESET  --", &lv_font_montserrat_16, 83, 116, 300, kOwSoftText);
+    _v2_today_caption_label = label("TODAY", &lv_font_montserrat_16, 43, 158, 58, kOwToday, LV_TEXT_ALIGN_LEFT);
+    _v2_today_value_label = label("--%", &lv_font_montserrat_16, 104, 158, 37, kOwToday, LV_TEXT_ALIGN_LEFT);
     _v2_status_label = label("", &lv_font_montserrat_18, 73, 27, 320, kOwBlue);
     _v2_status_label->setHidden(true);
-    _v2_meta_left_label = label("5H --", &lv_font_montserrat_16, 43, 211, 145, kOwSoftText, LV_TEXT_ALIGN_LEFT);
+    _v2_meta_left_label = label("WEEK --", &lv_font_montserrat_16, 43, 211, 145, kOwSoftText, LV_TEXT_ALIGN_LEFT);
     _v2_meta_right_label = label("RESET --", &lv_font_montserrat_16, 253, 211, 170, kOwSoftText, LV_TEXT_ALIGN_RIGHT);
+
+    _v2_encoder_feedback_labels[0] = label("", &lv_font_montserrat_20, 101, 126, 39, kOwBlue, LV_TEXT_ALIGN_RIGHT);
+    _v2_encoder_feedback_labels[1] = label("", &lv_font_montserrat_20, 326, 126, 39, kOwBlue, LV_TEXT_ALIGN_LEFT);
+    for (auto& feedback : _v2_encoder_feedback_labels) {
+        feedback->setSize(39, 24);
+        feedback->setBgColor(lv_color_hex(kOwBackground));
+        feedback->setBgOpa(LV_OPA_COVER);
+        feedback->setBorderWidth(0);
+        feedback->setPaddingAll(0);
+        feedback->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+        feedback->removeFlag(LV_OBJ_FLAG_CLICKABLE);
+    }
 
     _v2_knob = std::make_unique<Container>(_panel->get());
     _v2_knob->setSize(codex::deck::kKnob.width, codex::deck::kKnob.height);
@@ -1157,14 +1218,19 @@ void CodexView::updateOpenWatcherV2Labels()
         setLabelTextIfChanged(*_v2_title_label, title);
         _v2_title_label->setTextColor(lv_color_hex(color));
     }
-    if (_v2_remaining_value_label) {
-        const std::string remaining = week_valid ? std::to_string(week_pct) : "--";
-        setLabelTextIfChanged(*_v2_remaining_value_label, remaining);
+    if (_v2_remaining_value_label && _v2_remaining_ones_label) {
+        const std::string remaining = session_valid ? std::to_string(_state.session5hLeftPct) : "--";
+        const size_t ones_index = remaining.size() - 1;
+        setLabelTextIfChanged(*_v2_remaining_value_label, remaining.substr(0, ones_index));
+        setLabelTextIfChanged(*_v2_remaining_ones_label, remaining.substr(ones_index));
+        if (_v2_remaining_unit_label) {
+            _v2_remaining_unit_label->alignTo(*_v2_remaining_ones_label, LV_ALIGN_OUT_RIGHT_BOTTOM, 4, 0);
+        }
     }
     if (_v2_left_caption_label) {
-        const std::string reset = week_valid && !_state.weekly.resetInLabel.empty()
-                                      ? _state.weekly.resetInLabel : "--";
-        setLabelTextIfChanged(*_v2_left_caption_label, "WEEK LEFT  " + reset);
+        const std::string reset = session_valid && !_state.session5hResetLabel.empty()
+                                      ? _state.session5hResetLabel : "--";
+        setLabelTextIfChanged(*_v2_left_caption_label, "5H RESET  " + reset);
     }
     if (_v2_today_value_label) {
         const bool today_valid = _state.weeklyDayStartLeftPct >= 0;
@@ -1192,15 +1258,15 @@ void CodexView::updateOpenWatcherV2Labels()
         setHiddenIfChanged(*_v2_title_label, show_status);
     }
     if (_v2_meta_left_label) {
-        const std::string left = session_valid ? std::to_string(_state.session5hLeftPct) + "%" : "--";
-        setLabelTextIfChanged(*_v2_meta_left_label, "5H " + left);
-        _v2_meta_left_label->setTextColor(lv_color_hex(session_valid ? quota_semantic_color(_state.session5hLeftPct / 100.0f) : kOwSoftText));
+        const std::string left = week_valid ? std::to_string(week_pct) + "%" : "--";
+        setLabelTextIfChanged(*_v2_meta_left_label, "WEEK " + left);
+        _v2_meta_left_label->setTextColor(lv_color_hex(week_valid ? quota_semantic_color(week_pct / 100.0f) : kOwSoftText));
     }
     if (_v2_meta_right_label) {
-        const std::string reset = session_valid && !_state.session5hResetLabel.empty()
-                                      ? _state.session5hResetLabel : "--";
+        const std::string reset = week_valid && !_state.weekly.resetInLabel.empty()
+                                      ? _state.weekly.resetInLabel : "--";
         setLabelTextIfChanged(*_v2_meta_right_label, "RESET " + reset);
-        _v2_meta_right_label->setTextColor(lv_color_hex(session_valid ? kOwBlue : kOwSoftText));
+        _v2_meta_right_label->setTextColor(lv_color_hex(week_valid ? kOwBlue : kOwSoftText));
     }
     const bool action_message_visible = _voice_mode == VoiceMode::Idle && _state.messageExpiresAtMs != 0;
     if (_battery_status) setHiddenIfChanged(*_battery_status, action_message_visible);
@@ -1403,7 +1469,11 @@ void CodexView::drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords)
     arc.center = center;
     arc.rounded = 1;
 
-    const float week = remainingRatio(_state.weekly);
+    const bool session_valid = _state.quotaValid && !_state.stale &&
+                               _state.session5hLeftPct >= 0 && _state.session5hLeftPct <= 100;
+    const float session = session_valid
+                              ? static_cast<float>(_state.session5hLeftPct) / 100.0f
+                              : 0.0f;
 
     arc.radius = 223;
     arc.width = 7;
@@ -1433,7 +1503,7 @@ void CodexView::drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords)
     for (int i = 0; i < kTopSegments; ++i) {
         const float start = static_cast<float>(i) / static_cast<float>(kTopSegments);
         const float end = static_cast<float>(i + 1) / static_cast<float>(kTopSegments);
-        if (start >= week) {
+        if (start >= session) {
             break;
         }
         lv_area_t bounds = segment_bounds[i];
@@ -1441,7 +1511,7 @@ void CodexView::drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords)
         const auto& clip = layer->_clip_area;
         if (bounds.x2 < clip.x1 || bounds.x1 > clip.x2 ||
             bounds.y2 < clip.y1 || bounds.y1 > clip.y2) continue;
-        const float active_end = std::min(end, week);
+        const float active_end = std::min(end, session);
         const int start_deg = 180 + static_cast<int>(std::lround(180.0f * start));
         const int end_deg = 180 + static_cast<int>(std::lround(180.0f * active_end));
         if (end_deg <= start_deg) {
@@ -1470,47 +1540,43 @@ void CodexView::drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords)
         lv_draw_line(layer, &line);
     };
 
-    // 5h remaining quota. Keep a visible track for missing/stale data, but do
-    // not infer a value from the weekly window. The filled portion uses many
-    // short overlapping strokes so its semantic red-to-green color transition
-    // stays visually smooth on the round AMOLED.
-    constexpr int kSessionBarLeft = 43;
-    constexpr int kSessionBarRight = 423;
-    constexpr int kSessionBarY = 199;
-    constexpr int kSessionBarWidth = kSessionBarRight - kSessionBarLeft;
-    constexpr int kSessionBarSegments = 96;
-    draw_line(kSessionBarLeft,
-              kSessionBarY,
-              kSessionBarRight,
-              kSessionBarY,
+    // Weekly remaining quota. Keep a visible track for missing data. The
+    // filled portion uses many short overlapping strokes so its semantic
+    // red-to-green color transition stays visually smooth on the round AMOLED.
+    constexpr int kWeeklyBarLeft = 43;
+    constexpr int kWeeklyBarRight = 423;
+    constexpr int kWeeklyBarY = 199;
+    constexpr int kWeeklyBarWidth = kWeeklyBarRight - kWeeklyBarLeft;
+    constexpr int kWeeklyBarSegments = 96;
+    draw_line(kWeeklyBarLeft,
+              kWeeklyBarY,
+              kWeeklyBarRight,
+              kWeeklyBarY,
               kOwTrack,
               8,
               220);
-    const bool session_valid = _state.quotaValid && !_state.stale &&
-                               _state.session5hLeftPct >= 0 && _state.session5hLeftPct <= 100;
-    if (session_valid) {
-        const float remaining = static_cast<float>(
-                                    std::clamp(_state.session5hLeftPct, 0, 100)) /
-                                100.0f;
+    const bool week_valid = _state.quotaValid;
+    if (week_valid) {
+        const float remaining = remainingRatio(_state.weekly);
         const int filled_width = static_cast<int>(
-            std::lround(static_cast<float>(kSessionBarWidth) * remaining));
-        for (int segment = 0; segment < kSessionBarSegments; ++segment) {
-            const int segment_x1 = kSessionBarLeft +
-                                   (kSessionBarWidth * segment) / kSessionBarSegments;
-            if (segment_x1 >= kSessionBarLeft + filled_width) {
+            std::lround(static_cast<float>(kWeeklyBarWidth) * remaining));
+        for (int segment = 0; segment < kWeeklyBarSegments; ++segment) {
+            const int segment_x1 = kWeeklyBarLeft +
+                                   (kWeeklyBarWidth * segment) / kWeeklyBarSegments;
+            if (segment_x1 >= kWeeklyBarLeft + filled_width) {
                 break;
             }
             const int segment_x2 = std::min(
-                kSessionBarLeft + filled_width,
-                kSessionBarLeft +
-                    (kSessionBarWidth * (segment + 1)) / kSessionBarSegments);
+                kWeeklyBarLeft + filled_width,
+                kWeeklyBarLeft +
+                    (kWeeklyBarWidth * (segment + 1)) / kWeeklyBarSegments);
             const float midpoint = static_cast<float>(
-                                       segment_x1 + segment_x2 - 2 * kSessionBarLeft) /
-                                   (2.0f * static_cast<float>(kSessionBarWidth));
+                                       segment_x1 + segment_x2 - 2 * kWeeklyBarLeft) /
+                                   (2.0f * static_cast<float>(kWeeklyBarWidth));
             draw_line(segment_x1,
-                      kSessionBarY,
+                      kWeeklyBarY,
                       segment_x2,
-                      kSessionBarY,
+                      kWeeklyBarY,
                       quota_semantic_color(midpoint),
                       8,
                       255);
@@ -1528,7 +1594,7 @@ void CodexView::drawOpenWatcherV2(lv_layer_t* layer, const lv_area_t& coords)
     }
     lv_draw_label_dsc_t caption;
     lv_draw_label_dsc_init(&caption);
-    caption.text = "RECENT 4H"; caption.font = &lv_font_montserrat_14;
+    caption.text = "RECENT 8H"; caption.font = &lv_font_montserrat_14;
     caption.color = lv_color_hex(kOwSoftText);
     const lv_area_t caption_area = {coords.x1 + 42, coords.y1 + 242, coords.x1 + 135, coords.y1 + 257};
     lv_draw_label(layer, &caption, &caption_area);

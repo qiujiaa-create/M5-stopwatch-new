@@ -604,7 +604,7 @@ private final class BridgeStatusCenter {
 private final class OpenWatcherHomeActivityTracker {
     static let shared = OpenWatcherHomeActivityTracker()
 
-    private static let activityWindowSeconds: TimeInterval = 4 * 60 * 60
+    private static let activityWindowSeconds: TimeInterval = 8 * 60 * 60
     private static let recordingStartTargetPerBucket = 4.0
 
     private struct RecordingInterval: Codable {
@@ -1584,9 +1584,9 @@ private func buildDevicePanel() throws -> Data {
         "total_tokens_label": "--",
         "model_label": "Codex",
         "reasoning_label": currentCodexThinkingEffort(),
-        "activity_label": sessionActive ? "live" : "4h",
+        "activity_label": sessionActive ? "live" : "8h",
         "activity_live": sessionActive,
-        "activity_window": "4h",
+        "activity_window": "8h",
         "activity_buckets": activityBuckets
     ]
     let codex: [String: Any] = [
